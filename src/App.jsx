@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, Eye, MessageCircle, Phone } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -9,6 +9,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+
+  // State for item detail view modal
+  const [selectedItem, setSelectedItem] = useState(null);
 
   // State for posting new listing modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,6 +105,23 @@ export default function App() {
     setUserRole('user');
   };
 
+  const handleCardClick = async (item) => {
+    setSelectedItem(item);
+
+    // Record click notification for the owner if user is logged in
+    try {
+      await supabase.from('listing_clicks').insert([
+        {
+          listing_id: item.id,
+          owner_id: item.user_id,
+          viewer_id: user ? user.id : null
+        }
+      ]);
+    } catch (err) {
+      console.error('Error logging click:', err);
+    }
+  };
+
   const handleCreateListing = async (e) => {
     e.preventDefault();
     if (!newTitle || !newPrice) return alert('Please fill in title and price!');
@@ -155,7 +175,8 @@ export default function App() {
     }
   };
 
-  const handleDeleteListing = async (item) => {
+  const handleDeleteListing = async (e, item) => {
+    e.stopPropagation();
     const canDelete = userRole === 'owner' || userRole === 'admin' || (user && item.user_id === user.id);
     if (!canDelete) return alert('You do not have permission to delete this listing.');
 
@@ -165,6 +186,7 @@ export default function App() {
       const { error } = await supabase.from('listings').delete().eq('id', item.id);
       if (error) throw error;
       setListings(listings.filter(l => l.id !== item.id));
+      if (selectedItem?.id === item.id) setSelectedItem(null);
     } catch (err) {
       alert('Error deleting listing: ' + err.message);
     }
@@ -254,7 +276,7 @@ export default function App() {
       <section className="bg-gradient-to-r from-orange-600 to-amber-600 text-white py-12 px-4 text-center">
         <h1 className="text-3xl md:text-4xl font-bold mb-3">Buy and sell, simply across Nepal.</h1>
         <p className="text-orange-100 max-w-xl mx-auto text-sm md:text-base mb-6">
-          From smartphones and scooters to apartments and jobs. Post free in under a minute.
+          From smartphones and scooters to apartments and jobs. Click any ad to view details & connect!
         </p>
         {user && (
           <button
@@ -293,7 +315,7 @@ export default function App() {
           ))}
         </div>
 
-        <h2 className="text-xl font-bold text-gray-800 mb-6">Freshly Posted Ads</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Freshly Posted Ads (Click to View)</h2>
         {loading ? (
           <div className="text-center py-20 text-gray-500">Loading marketplace listings...</div>
         ) : filteredListings.length === 0 ? (
@@ -310,13 +332,17 @@ export default function App() {
             {filteredListings.map((item) => {
               const canModify = isPrivileged || (user && item.user_id === user.id);
               return (
-                <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between">
+                <div 
+                  key={item.id} 
+                  onClick={() => handleCardClick(item)}
+                  className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer group"
+                >
                   <div>
-                    <div className="h-48 bg-gray-100 relative">
+                    <div className="h-48 bg-gray-100 relative overflow-hidden">
                       <img 
                         src={item.image_url} 
                         alt={item.title} 
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                       />
                       <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded font-medium">
                         {item.category}
@@ -330,13 +356,13 @@ export default function App() {
                   </div>
                   <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t pt-3">
                     <span className="flex items-center"><MapPin size={12} className="mr-1" />{item.city || 'Nepal'}</span>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
                       <span>{new Date(item.created_at).toLocaleDateString()}</span>
                       {canModify && (
                         <button 
-                          onClick={() => handleDeleteListing(item)}
+                          onClick={(e) => handleDeleteListing(e, item)}
                           className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-md"
-                          title={isPrivileged ? "Delete as Admin/Owner" : "Delete your post"}
+                          title="Delete post"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -349,6 +375,57 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Item Detail / Notification Modal */}
+      {selectedItem && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 relative shadow-xl max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setSelectedItem(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-1.5 rounded-full"
+            >
+              <X size={20} />
+            </button>
+            <div className="h-64 bg-gray-100 rounded-xl overflow-hidden mb-4">
+              <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
+            </div>
+            <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-1 rounded-md font-semibold">
+              {selectedItem.category}
+            </span>
+            <h2 className="text-2xl font-bold text-gray-900 mt-2 mb-1">{selectedItem.title}</h2>
+            <div className="text-xl font-extrabold text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
+            
+            <div className="flex items-center text-sm text-gray-600 mb-4">
+              <MapPin size={16} className="mr-1 text-orange-600" />
+              <span>Location: {selectedItem.city || 'Nepal'}</span>
+              <span className="mx-3">•</span>
+              <span>Posted: {new Date(selectedItem.created_at).toLocaleDateString()}</span>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-6 border">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-line">{selectedItem.description || 'No description provided.'}</p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <a
+                href={`https://wa.me/?text=Hi, I am interested in your listing "${selectedItem.title}" listed for Rs. ${selectedItem.price} on Kinmel.`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center shadow-sm transition"
+              >
+                <MessageCircle size={18} className="mr-2" /> Inquire via WhatsApp
+              </a>
+              <button 
+                onClick={() => alert('Interest registered! The owner has been notified of your click.')}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-3 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center"
+              >
+                <Phone size={16} className="mr-2" /> Notify Owner
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Post Ad Modal */}
       {isModalOpen && (
