@@ -356,4 +356,38 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y text-sm text-gray-700">
-                  {clickLogs.map((log) =>
+                  {clickLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50/80 transition">
+                      <td className="py-4 px-6 font-semibold text-gray-900">{log.listings?.title || 'Deleted Listing'}</td>
+                      <td className="py-4 px-6"><span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-medium">{log.listings?.category || 'N/A'}</span></td>
+                      <td className="py-4 px-6 font-bold text-orange-600">{log.listings?.price ? `Rs. ${log.listings.price.toLocaleString()}` : 'N/A'}</td>
+                      <td className="py-4 px-6 font-medium text-gray-900">{log.viewer_email || 'Guest Visitor'}</td>
+                      <td className="py-4 px-6 text-xs text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      ) : (
+        <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+          {/* Small Slim Orange Hero Banner */}
+          <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-6 py-6 mb-8 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <h1 className="text-xl md:text-2xl font-black tracking-tight">Buy and sell, simply across Nepal.</h1>
+              <p className="text-xs md:text-sm text-orange-100 mt-1">From smartphones and scooters to apartments and jobs. Click any ad to view details & connect!</p>
+            </div>
+            {user && (
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-5 py-2.5 rounded-xl text-xs shadow-sm transition whitespace-nowrap"
+              >
+                + Post Your Free Ad Now
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Left Sidebar Categories */}
+            <aside className="lg:col-span
