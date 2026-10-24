@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [isOwner, setIsOwner] = useState(false);
+  const [userRole, setUserRole] = useState('user'); // 'owner', 'admin', or 'user'
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,7 +26,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) checkOwnerStatus(currentUser.id);
+      if (currentUser) fetchUserRole(currentUser.id);
       
       if (session && window.location.hash) {
         window.history.replaceState(null, '', window.location.pathname);
@@ -37,9 +37,9 @@ export default function App() {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        checkOwnerStatus(currentUser.id);
+        fetchUserRole(currentUser.id);
       } else {
-        setIsOwner(false);
+        setUserRole('user');
       }
 
       if (window.location.hash) {
@@ -52,7 +52,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function checkOwnerStatus(userId) {
+  async function fetchUserRole(userId) {
     try {
       const { data } = await supabase
         .from('user_roles')
@@ -60,13 +60,14 @@ export default function App() {
         .eq('id', userId)
         .single();
 
-      if (data && data.role === 'owner') {
-        setIsOwner(true);
+      if (data) {
+        setUserRole(data.role); // 'owner', 'admin', or 'user'
       } else {
-        setIsOwner(false);
+        setUserRole('user');
       }
     } catch (err) {
-      console.error('Error checking owner role:', err);
+      console.error('Error fetching role:', err);
+      setUserRole('user');
     }
   }
 
@@ -98,7 +99,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setIsOwner(false);
+    setUserRole('user');
   };
 
   const handleCreateListing = async (e) => {
@@ -109,7 +110,6 @@ export default function App() {
       setPosting(true);
       let imageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
 
-      // Upload image file to Supabase Storage if selected
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
@@ -121,7 +121,6 @@ export default function App() {
 
         if (uploadError) throw uploadError;
 
-        // Get public URL of the uploaded image
         const { data: publicURLData } = supabase.storage
           .from('listing-images')
           .getPublicUrl(filePath);
@@ -143,7 +142,6 @@ export default function App() {
 
       if (error) throw error;
 
-      // Reset form & close modal
       setNewTitle('');
       setNewDescription('');
       setNewPrice('');
@@ -157,13 +155,17 @@ export default function App() {
     }
   };
 
-  const handleDeleteListing = async (id) => {
+  const handleDeleteListing = async (item) => {
+    // Allow delete if user is owner/admin OR if they own the specific post
+    const canDelete = userRole === 'owner' || userRole === 'admin' || (user && item.user_id === user.id);
+    if (!canDelete) return alert('You do not have permission to delete this listing.');
+
     if (!confirm('Are you sure you want to delete this listing?')) return;
 
     try {
-      const { error } = await supabase.from('listings').delete().eq('id', id);
+      const { error } = await supabase.from('listings').delete().eq('id', item.id);
       if (error) throw error;
-      setListings(listings.filter(item => item.id !== id));
+      setListings(listings.filter(l => l.id !== item.id));
     } catch (err) {
       alert('Error deleting listing: ' + err.message);
     }
@@ -176,6 +178,8 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
+  const isPrivileged = userRole === 'owner' || userRole === 'admin';
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* Header */}
@@ -184,8 +188,11 @@ export default function App() {
           <div className="flex items-center space-x-2">
             <span className="text-2xl font-extrabold text-orange-600 tracking-tight">Kinmel</span>
             <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Nepal</span>
-            {isOwner && (
-              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold ml-2">Owner Admin</span>
+            {userRole === 'owner' && (
+              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold ml-2">Owner</span>
+            )}
+            {userRole === 'admin' && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold ml-2">Admin</span>
             )}
           </div>
           
@@ -290,47 +297,50 @@ export default function App() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredListings.map((item) => (
-              <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between">
-                <div>
-                  <div className="h-48 bg-gray-100 relative">
-                    <img 
-                      src={item.image_url} 
-                      alt={item.title} 
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded font-medium">
-                      {item.category}
-                    </span>
+            {filteredListings.map((item) => {
+              const canModify = isPrivileged || (user && item.user_id === user.id);
+              return (
+                <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between">
+                  <div>
+                    <div className="h-48 bg-gray-100 relative">
+                      <img 
+                        src={item.image_url} 
+                        alt={item.title} 
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded font-medium">
+                        {item.category}
+                      </span>
+                    </div>
+                    <div className="p-4">
+                      <div className="text-lg font-bold text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
+                      <h3 className="text-sm font-medium text-gray-800 line-clamp-1 mb-2">{item.title}</h3>
+                      <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
+                    </div>
                   </div>
-                  <div className="p-4">
-                    <div className="text-lg font-bold text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
-                    <h3 className="text-sm font-medium text-gray-800 line-clamp-1 mb-2">{item.title}</h3>
-                    <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
+                  <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t pt-3">
+                    <span className="flex items-center"><MapPin size={12} className="mr-1" />{item.city || 'Nepal'}</span>
+                    <div className="flex items-center space-x-2">
+                      <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                      {canModify && (
+                        <button 
+                          onClick={() => handleDeleteListing(item)}
+                          className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-md"
+                          title={isPrivileged ? "Delete as Admin/Owner" : "Delete your post"}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t pt-3">
-                  <span className="flex items-center"><MapPin size={12} className="mr-1" />{item.city || 'Nepal'}</span>
-                  <div className="flex items-center space-x-2">
-                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                    {isOwner && (
-                      <button 
-                        onClick={() => handleDeleteListing(item.id)}
-                        className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-md"
-                        title="Delete as Owner"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
 
-      {/* Post Ad Modal with File Picker */}
+      {/* Post Ad Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 relative shadow-xl max-h-[90vh] overflow-y-auto">
