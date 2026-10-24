@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Tag } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -427,100 +427,106 @@ export default function App() {
         </main>
       ) : (
         /* ================= MARKETPLACE VIEW ================= */
-        <>
-          {/* Hero Banner with Tagline */}
-          <section className="bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white py-12 px-4 text-center shadow-inner">
-            <div className="max-w-3xl mx-auto">
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-3">Buy, sell and rent everything</h1>
-              <p className="text-orange-100 text-base md:text-lg mb-6 font-medium">
-                Your trusted local marketplace across Nepal for gear, property, vehicles, electronics and more.
-              </p>
-              {user && (
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-8 py-3 rounded-2xl text-sm shadow-lg transition transform hover:-translate-y-0.5"
-                >
-                  + Post Your Free Ad Now
-                </button>
-              )}
+        <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+          {/* Subtle Top Bar with Tagline */}
+          <div className="bg-white border border-gray-200/80 rounded-2xl px-6 py-4 mb-6 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
+                <Tag size={20} />
+              </div>
+              <div>
+                <h1 className="text-lg font-black text-gray-900 tracking-tight">Sell Rent And Buy Everything</h1>
+                <p className="text-xs text-gray-500">Nepal's trusted local marketplace for buying, selling, and renting.</p>
+              </div>
             </div>
-          </section>
+            {user && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs shadow-sm transition"
+              >
+                + Post Free Ad
+              </button>
+            )}
+          </div>
 
-          {/* Main Layout: Left Sidebar Categories + Right Listings */}
-          <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-              
-              {/* Left Sidebar Categories */}
-              <aside className="lg:col-span-1">
-                <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs sticky top-20">
-                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center">
-                    <LayoutGrid size={15} className="mr-2 text-orange-600" /> Categories
-                  </h3>
-                  <div className="space-y-1">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            
+            {/* Left Sidebar Categories */}
+            <aside className="lg:col-span-1">
+              <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs sticky top-20">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center">
+                  <LayoutGrid size={15} className="mr-2 text-orange-600" /> Categories
+                </h3>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => setSelectedCategory('All')}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                      selectedCategory === 'All' 
+                        ? 'bg-orange-500 text-white shadow-sm' 
+                        : 'text-gray-700 hover:bg-gray-100/70'
+                    }`}
+                  >
+                    All Items
+                  </button>
+                  {categories.map((cat) => (
                     <button
-                      onClick={() => setSelectedCategory('All')}
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat === selectedCategory ? 'All' : cat)}
                       className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                        selectedCategory === 'All' 
+                        selectedCategory === cat 
                           ? 'bg-orange-500 text-white shadow-sm' 
                           : 'text-gray-700 hover:bg-gray-100/70'
                       }`}
                     >
-                      All Items
+                      {cat}
                     </button>
-                    {categories.map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setSelectedCategory(cat === selectedCategory ? 'All' : cat)}
-                        className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                          selectedCategory === cat 
-                            ? 'bg-orange-500 text-white shadow-sm' 
-                            : 'text-gray-700 hover:bg-gray-100/70'
-                        }`}
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* Right Content Listings */}
+            <div className="lg:col-span-3">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-black text-gray-900">
+                    {selectedCategory === 'All' ? 'Freshly Posted Ads' : `${selectedCategory} Listings`}
+                  </h2>
+                </div>
+                <span className="text-xs font-semibold bg-gray-200/70 text-gray-700 px-3 py-1 rounded-full">
+                  {filteredListings.length} items
+                </span>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-24 text-gray-500 font-medium">Loading marketplace...</div>
+              ) : filteredListings.length === 0 ? (
+                <div className="text-center py-24 bg-white rounded-2xl border border-gray-200 shadow-xs">
+                  <p className="text-gray-600 font-semibold mb-2">No live listings found matching your criteria.</p>
+                  {user && (
+                    <button onClick={() => setIsModalOpen(true)} className="text-orange-600 text-sm font-bold hover:underline">
+                      Be the first to post in this category!
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredListings.map((item) => {
+                    const canModify = isPrivileged || (user && item.user_id === user.id);
+                    return (
+                      <div 
+                        key={item.id} 
+                        onClick={() => handleCardClick(item)}
+                        className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group"
                       >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </aside>
-
-              {/* Right Content Listings */}
-              <div className="lg:col-span-3">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-2xl font-black text-gray-900">
-                      {selectedCategory === 'All' ? 'Freshly Posted Ads' : `${selectedCategory} Listings`}
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Click any listing to view details, call, or message instantly</p>
-                  </div>
-                  <span className="text-xs font-semibold bg-gray-200/70 text-gray-700 px-3 py-1 rounded-full">
-                    {filteredListings.length} items
-                  </span>
-                </div>
-
-                {loading ? (
-                  <div className="text-center py-24 text-gray-500 font-medium">Loading marketplace...</div>
-                ) : filteredListings.length === 0 ? (
-                  <div className="text-center py-24 bg-white rounded-2xl border border-gray-200 shadow-xs">
-                    <p className="text-gray-600 font-semibold mb-2">No live listings found matching your criteria.</p>
-                    {user && (
-                      <button onClick={() => setIsModalOpen(true)} className="text-orange-600 text-sm font-bold hover:underline">
-                        Be the first to post in this category!
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredListings.map((item) => {
-                      const canModify = isPrivileged || (user && item.user_id === user.id);
-                      return (
-                        <div 
-                          key={item.id} 
-                          onClick={() => handleCardClick(item)}
-                          className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group"
-                        >
-                          <div>
-                            <div className="h-48 bg-gray-100 relative overflow-hidden">
-                              <img 
-                                src={item.image_url} 
-                                alt={item.title}
+                        <div>
+                          <div className="h-48 bg-gray-100 relative overflow-hidden">
+                            <img 
+                              src={item.image_url} 
+                              alt={item.title} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                            />
+                            <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-xs text-white text-xs px-2.5 py-1 rounded-lg font-medium">
+                              {item.category}
+                            </span>
+                          </div>
