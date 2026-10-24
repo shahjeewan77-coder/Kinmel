@@ -218,6 +218,7 @@ export default function App() {
     }
   };
 
+  // Filtering listings based on category selection ('All' shows everything)
   const filteredListings = listings.filter((item) => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -320,4 +321,106 @@ export default function App() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Live Listings</p>
                 <h3 className="text-3xl font-black text-gray-900">{listings.length}</h3>
               </div>
-              <div className="p-3.5 bg-orange
+              <div className="p-3.5 bg-orange-50 text-orange-600 rounded-2xl"><BarChart3 size={24} /></div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Ad Clicks / Views</p>
+                <h3 className="text-3xl font-black text-gray-900">{clickLogs.length}</h3>
+              </div>
+              <div className="p-3.5 bg-blue-50 text-blue-600 rounded-2xl"><MousePointerClick size={24} /></div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Active User Role</p>
+                <h3 className="text-xl font-bold text-orange-600 capitalize">{userRole} Admin</h3>
+              </div>
+              <div className="p-3.5 bg-red-50 text-red-600 rounded-2xl"><Users size={24} /></div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b bg-gray-50/70 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-base flex items-center">
+                <MousePointerClick size={18} className="mr-2 text-orange-600" /> Buyer Ad Click Notifications
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b bg-gray-50/50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3.5 px-6">Clicked Ad Title</th>
+                    <th className="py-3.5 px-6">Category</th>
+                    <th className="py-3.5 px-6">Price</th>
+                    <th className="py-3.5 px-6">Viewer Gmail / User</th>
+                    <th className="py-3.5 px-6">Time Clicked</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-sm text-gray-700">
+                  {clickLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50/80 transition">
+                      <td className="py-4 px-6 font-semibold text-gray-900">{log.listings?.title || 'Deleted Listing'}</td>
+                      <td className="py-4 px-6"><span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-medium">{log.listings?.category || 'N/A'}</span></td>
+                      <td className="py-4 px-6 font-bold text-orange-600">{log.listings?.price ? `Rs. ${log.listings.price.toLocaleString()}` : 'N/A'}</td>
+                      <td className="py-4 px-6 font-medium text-gray-900">{log.viewer_email || 'Guest Visitor'}</td>
+                      <td className="py-4 px-6 text-xs text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      ) : (
+        <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+          {/* Top Title Bar */}
+          <div className="bg-white border border-gray-200/80 rounded-2xl px-6 py-4 mb-6 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl"><Layers size={20} /></div>
+              <div>
+                <h1 className="text-lg font-black text-gray-900 tracking-tight">Buy sell and rent anything</h1>
+                <p className="text-xs text-gray-500">Nepal's trusted local marketplace for buying, selling, and renting.</p>
+              </div>
+            </div>
+            {user && (
+              <button onClick={() => setIsModalOpen(true)} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs shadow-sm">
+                + Post Free Ad
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Left Sidebar Categories */}
+            <aside className="lg:col-span-1">
+              <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs sticky top-20">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center">
+                  <LayoutGrid size={15} className="mr-2 text-orange-600" /> Categories
+                </h3>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => setSelectedCategory('All')}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                      selectedCategory === 'All' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100/70'
+                    }`}
+                  >
+                    All Items
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                        selectedCategory === cat ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100/70'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* Right Content Listings */}
+            <div className="lg:col-span-3">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-black text-gray-
