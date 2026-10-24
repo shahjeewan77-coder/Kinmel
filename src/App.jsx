@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, Eye, MessageCircle, Phone } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -20,6 +20,7 @@ export default function App() {
   const [newPrice, setNewPrice] = useState('');
   const [newCategory, setNewCategory] = useState('Vehicles');
   const [newCity, setNewCity] = useState('Dhangadhi');
+  const [newPhone, setNewPhone] = useState(''); // Added phone state
   const [imageFile, setImageFile] = useState(null);
   const [posting, setPosting] = useState(false);
 
@@ -108,7 +109,7 @@ export default function App() {
   const handleCardClick = async (item) => {
     setSelectedItem(item);
 
-    // Record click notification for the owner if user is logged in
+    // Record click notification for the owner
     try {
       await supabase.from('listing_clicks').insert([
         {
@@ -155,6 +156,7 @@ export default function App() {
           price: parseFloat(newPrice),
           category: newCategory,
           city: newCity,
+          phone: newPhone, // Saving phone number
           image_url: imageUrl,
           user_id: user.id
         }
@@ -165,6 +167,7 @@ export default function App() {
       setNewTitle('');
       setNewDescription('');
       setNewPrice('');
+      setNewPhone('');
       setImageFile(null);
       setIsModalOpen(false);
       fetchListings();
@@ -395,10 +398,11 @@ export default function App() {
             <h2 className="text-2xl font-bold text-gray-900 mt-2 mb-1">{selectedItem.title}</h2>
             <div className="text-xl font-extrabold text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
             
-            <div className="flex items-center text-sm text-gray-600 mb-4">
-              <MapPin size={16} className="mr-1 text-orange-600" />
-              <span>Location: {selectedItem.city || 'Nepal'}</span>
-              <span className="mx-3">•</span>
+            <div className="flex items-center text-sm text-gray-600 mb-4 flex-wrap gap-y-2">
+              <span className="flex items-center mr-4"><MapPin size={16} className="mr-1 text-orange-600" />Location: {selectedItem.city || 'Nepal'}</span>
+              {selectedItem.phone && (
+                <span className="flex items-center mr-4 font-semibold text-gray-800"><Phone size={16} className="mr-1 text-orange-600" />Contact: {selectedItem.phone}</span>
+              )}
               <span>Posted: {new Date(selectedItem.created_at).toLocaleDateString()}</span>
             </div>
 
@@ -416,12 +420,21 @@ export default function App() {
               >
                 <MessageCircle size={18} className="mr-2" /> Inquire via WhatsApp
               </a>
-              <button 
-                onClick={() => alert('Interest registered! The owner has been notified of your click.')}
-                className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-3 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center"
-              >
-                <Phone size={16} className="mr-2" /> Notify Owner
-              </button>
+              {selectedItem.phone ? (
+                <a 
+                  href={`tel:${selectedItem.phone}`}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-3 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center"
+                >
+                  <Phone size={16} className="mr-2" /> Call Owner
+                </a>
+              ) : (
+                <button 
+                  onClick={() => alert('Interest registered! The owner has been notified of your click.')}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-3 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center"
+                >
+                  <Phone size={16} className="mr-2" /> Notify Owner
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -485,18 +498,28 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Upload Photo</label>
-                  <label className="flex items-center justify-center w-full border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 text-gray-600">
-                    <Upload size={16} className="mr-2 text-orange-600" />
-                    <span className="truncate">{imageFile ? imageFile.name : 'Choose file...'}</span>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => setImageFile(e.target.files[0])}
-                    />
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Contact Phone Number</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. 9812345678" 
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                  />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Upload Photo</label>
+                <label className="flex items-center justify-center w-full border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 text-gray-600">
+                  <Upload size={16} className="mr-2 text-orange-600" />
+                  <span className="truncate">{imageFile ? imageFile.name : 'Choose file...'}</span>
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setImageFile(e.target.files[0])}
+                  />
+                </label>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
