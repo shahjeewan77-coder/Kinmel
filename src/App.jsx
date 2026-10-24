@@ -320,39 +320,4 @@ export default function App() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Live Listings</p>
                 <h3 className="text-3xl font-black text-gray-900">{listings.length}</h3>
               </div>
-              <div className="p-3.5 bg-orange-50 text-orange-600 rounded-2xl"><BarChart3 size={24} /></div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Ad Clicks / Views</p>
-                <h3 className="text-3xl font-black text-gray-900">{clickLogs.length}</h3>
-              </div>
-              <div className="p-3.5 bg-blue-50 text-blue-600 rounded-2xl"><MousePointerClick size={24} /></div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Active User Role</p>
-                <h3 className="text-xl font-bold text-orange-600 capitalize">{userRole} Admin</h3>
-              </div>
-              <div className="p-3.5 bg-red-50 text-red-600 rounded-2xl"><Users size={24} /></div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b bg-gray-50/70 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 text-base flex items-center">
-                <MousePointerClick size={18} className="mr-2 text-orange-600" /> Buyer Ad Click Notifications
-              </h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b bg-gray-50/50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-6">Clicked Ad Title</th>
-                    <th className="py-3.5 px-6">Category</th>
-                    <th className="py-3.5 px-6">Price</th>
-                    <th className="py-3.5 px-6">Viewer Gmail / User</th>
-                    <th className="py-3.5 px-6">Time Clicked</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y text-sm text-gray-700
+              <div className="p-3.5 bg-orange
