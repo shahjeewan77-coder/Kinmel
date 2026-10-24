@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -17,13 +17,12 @@ export default function App() {
   const [newPrice, setNewPrice] = useState('');
   const [newCategory, setNewCategory] = useState('Vehicles');
   const [newCity, setNewCity] = useState('Dhangadhi');
-  const [newImageUrl, setNewImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState(null);
   const [posting, setPosting] = useState(false);
 
   const categories = ['Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
 
   useEffect(() => {
-    // 1. Check active session on load and clean up the OAuth hash tokens
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -34,7 +33,6 @@ export default function App() {
       }
     });
 
-    // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -56,7 +54,7 @@ export default function App() {
 
   async function checkOwnerStatus(userId) {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('user_roles')
         .select('role')
         .eq('id', userId)
@@ -109,6 +107,28 @@ export default function App() {
 
     try {
       setPosting(true);
+      let imageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
+
+      // Upload image file to Supabase Storage if selected
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('listing-images')
+          .upload(filePath, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL of the uploaded image
+        const { data: publicURLData } = supabase.storage
+          .from('listing-images')
+          .getPublicUrl(filePath);
+
+        imageUrl = publicURLData.publicUrl;
+      }
+
       const { error } = await supabase.from('listings').insert([
         {
           title: newTitle,
@@ -116,7 +136,7 @@ export default function App() {
           price: parseFloat(newPrice),
           category: newCategory,
           city: newCity,
-          image_url: newImageUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30',
+          image_url: imageUrl,
           user_id: user.id
         }
       ]);
@@ -127,7 +147,7 @@ export default function App() {
       setNewTitle('');
       setNewDescription('');
       setNewPrice('');
-      setNewImageUrl('');
+      setImageFile(null);
       setIsModalOpen(false);
       fetchListings();
     } catch (err) {
@@ -275,7 +295,7 @@ export default function App() {
                 <div>
                   <div className="h-48 bg-gray-100 relative">
                     <img 
-                      src={item.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30'} 
+                      src={item.image_url} 
                       alt={item.title} 
                       className="w-full h-full object-cover"
                     />
@@ -310,10 +330,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Post Ad Modal */}
+      {/* Post Ad Modal with File Picker */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 relative shadow-xl">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 relative shadow-xl max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setIsModalOpen(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
@@ -368,14 +388,17 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Image URL</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://example.com/image.jpg" 
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                  />
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Upload Photo</label>
+                  <label className="flex items-center justify-center w-full border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 text-gray-600">
+                    <Upload size={16} className="mr-2 text-orange-600" />
+                    <span className="truncate">{imageFile ? imageFile.name : 'Choose file...'}</span>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setImageFile(e.target.files[0])}
+                    />
+                  </label>
                 </div>
               </div>
               <div>
@@ -393,7 +416,7 @@ export default function App() {
                 disabled={posting}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow-sm"
               >
-                {posting ? 'Publishing...' : 'Publish Listing'}
+                {posting ? 'Uploading & Publishing...' : 'Publish Listing'}
               </button>
             </form>
           </div>
