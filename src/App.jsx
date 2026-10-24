@@ -372,24 +372,22 @@ export default function App() {
         </main>
       ) : (
         <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
-          {/* Small Slim Orange Hero Banner */}
-          <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-6 py-6 mb-8 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl md:text-2xl font-black tracking-tight">Buy and sell, simply across Nepal.</h1>
-              <p className="text-xs md:text-sm text-orange-100 mt-1">From smartphones and scooters to apartments and jobs. Click any ad to view details & connect!</p>
-            </div>
-            {user && (
+          {/* Slim Orange Banner with "buy sell and rent anything" in the middle */}
+          <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-6 py-5 mb-8 text-white shadow-md flex items-center justify-between">
+            <div></div>
+            <h1 className="text-xl md:text-2xl font-black tracking-tight uppercase text-center">buy sell and rent anything</h1>
+            {user ? (
               <button 
                 onClick={() => setIsModalOpen(true)}
-                className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-5 py-2.5 rounded-xl text-xs shadow-sm transition whitespace-nowrap"
+                className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition whitespace-nowrap"
               >
-                + Post Your Free Ad Now
+                + Post Free Ad
               </button>
-            )}
+            ) : <div></div>}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Left Sidebar Categories */}
+            {/* Left Sidebar Categories starting right below Kinmel */}
             <aside className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs sticky top-20">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center">
