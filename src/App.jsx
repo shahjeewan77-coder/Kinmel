@@ -109,6 +109,7 @@ export default function App() {
           id,
           created_at,
           viewer_id,
+          viewer_email,
           listings (
             id,
             title,
@@ -147,13 +148,14 @@ export default function App() {
   const handleCardClick = async (item) => {
     setSelectedItem(item);
 
-    // Record click notification for the owner / admin analytics
+    // Record click notification along with the user's email if available
     try {
       await supabase.from('listing_clicks').insert([
         {
           listing_id: item.id,
           owner_id: item.user_id,
-          viewer_id: user ? user.id : null
+          viewer_id: user ? user.id : null,
+          viewer_email: user ? user.email : 'Guest Visitor'
         }
       ]);
     } catch (err) {
@@ -394,7 +396,7 @@ export default function App() {
                       <th className="py-3 px-6">Clicked Ad Title</th>
                       <th className="py-3 px-6">Category</th>
                       <th className="py-3 px-6">Price</th>
-                      <th className="py-3 px-6">Viewer ID / User</th>
+                      <th className="py-3 px-6">Viewer Gmail / User</th>
                       <th className="py-3 px-6">Time Clicked</th>
                     </tr>
                   </thead>
@@ -410,8 +412,8 @@ export default function App() {
                         <td className="py-3 px-6 font-medium text-orange-600">
                           {log.listings?.price ? `Rs. ${log.listings.price.toLocaleString()}` : 'N/A'}
                         </td>
-                        <td className="py-3 px-6 text-xs text-gray-500 font-mono">
-                          {log.viewer_id ? `${log.viewer_id.substring(0, 12)}...` : 'Guest Visitor'}
+                        <td className="py-3 px-6 font-medium text-gray-900">
+                          {log.viewer_email || 'Guest Visitor'}
                         </td>
                         <td className="py-3 px-6 text-xs text-gray-500">
                           {new Date(log.created_at).toLocaleString()}
