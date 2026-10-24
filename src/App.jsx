@@ -434,83 +434,15 @@ export default function App() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredListings.map((item) => (
-                    <div 
-                      key={item.id} 
-                      onClick={() => handleCardClick(item)}
-                      className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group"
-                    >
-                      <div>
-                        <div className="h-48 bg-gray-100 relative overflow-hidden">
-                          <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                          <span className="absolute top-3 left-3 bg-black/70 text-white text-xs px-2.5 py-1 rounded-lg font-medium">{item.category}</span>
-                        </div>
-                        <div className="p-4">
-                          <div className="text-lg font-black text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
-                          <h3 className="text-sm font-bold text-gray-800 line-clamp-1 mb-1.5">{item.title}</h3>
-                          <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                        </div>
-                      </div>
-                      <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-3">
-                        <span className="flex items-center font-medium"><MapPin size={13} className="mr-1 text-orange-600" />{item.city || 'Nepal'}</span>
-                        <span className="text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* Item Detail Modal */}
-      {selectedItem && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4"><img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" /></div>
-            <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
-            <h2 className="text-2xl font-black text-gray-900 mt-2.5 mb-1">{selectedItem.title}</h2>
-            <div className="text-2xl font-black text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
-            <div className="flex items-center text-sm text-gray-600 mb-5 flex-wrap gap-y-2 bg-gray-50 p-3.5 rounded-xl border border-gray-200/60">
-              <span className="flex items-center mr-4 font-medium"><MapPin size={16} className="mr-1 text-orange-600" />Location: {selectedItem.city || 'Nepal'}</span>
-              {selectedItem.phone && <span className="flex items-center mr-4 font-bold text-gray-900"><Phone size={16} className="mr-1 text-orange-600" />Contact: {selectedItem.phone}</span>}
-            </div>
-            <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-200/60">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h4>
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{selectedItem.description || 'No description provided.'}</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <a href={`https://wa.me/?text=Hi, I am interested in your listing "${selectedItem.title}"`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm flex items-center justify-center shadow-sm">
-                <MessageCircle size={18} className="mr-2" /> WhatsApp Inquiry
-              </a>
-              {selectedItem.phone ? (
-                <a href={`tel:${selectedItem.phone}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
-                  <Phone size={16} className="mr-2" /> Call Owner
-                </a>
-              ) : (
-                <button onClick={() => alert('Owner notified!')} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
-                  Notify Owner
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Post Ad Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <h2 className="text-xl font-black text-gray-900 mb-4">Post a New Ad</h2>
-            <form onSubmit={handleCreateListing} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Ad Title *</label>
-                <input type="text" required placeholder="e.g. Honda Dio Scooter 2022" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Price (NPR) *</label>
-                  <input type="number" required placeholder="e.g. 150000" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice}
+                  {filteredListings.map((item) => {
+                    const canModify = isPrivileged || (user && item.user_id === user.id);
+                    return (
+                      <div 
+                        key={item.id} 
+                        onClick={() => handleCardClick(item)}
+                        className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+                      >
+                        <div>
+                          <div className="h-48 bg-gray-100 relative overflow-hidden">
+                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                            <span className="absolute top-3 left-3 bg-black/75 text-white text-xs
