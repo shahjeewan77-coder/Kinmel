@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { MapPin } from 'lucide-react';
+import { PlusCircle } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import { X } from 'lucide-react';
+import { Upload } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
+import { Phone } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -9,45 +16,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-
   const [currentView, setCurrentView] = useState('marketplace');
-  const [clickLogs, setClickLogs] = useState([]);
-  const [loadingClicks, setLoadingClicks] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newCategory, setNewCategory] = useState('Vehicles');
-  const [newCity, setNewCity] = useState('Dhangadhi');
-  const [newPhone, setNewPhone] = useState('');
-  const [imageFile, setImageFile] = useState(null);
-  const [posting, setPosting] = useState(false);
-
-  const categories = ['Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) fetchUserRole(currentUser.id);
-      
+      setUser(session?.user ?? null);
       if (session && window.location.hash) {
         window.history.replaceState(null, '', window.location.pathname);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        fetchUserRole(currentUser.id);
-      } else {
-        setUserRole('user');
-        setCurrentView('marketplace');
-      }
-
+      setUser(session?.user ?? null);
       if (window.location.hash) {
         window.history.replaceState(null, '', window.location.pathname);
       }
@@ -57,20 +37,6 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  async function fetchUserRole(userId) {
-    try {
-      const { data } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (data) setUserRole(data.role);
-    } catch (err) {
-      setUserRole('user');
-    }
-  }
 
   async function fetchListings() {
     try {
@@ -89,134 +55,29 @@ export default function App() {
     }
   }
 
-  async function fetchClickLogs() {
-    try {
-      setLoadingClicks(true);
-      const { data, error } = await supabase
-        .from('listing_clicks')
-        .select(`
-          id,
-          created_at,
-          viewer_id,
-          viewer_email,
-          listings (
-            id,
-            title,
-            price,
-            category,
-            city,
-            user_id
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setClickLogs(data || []);
-    } catch (err) {
-      console.error('Error fetching click logs:', err.message);
-    } finally {
-      setLoadingClicks(false);
-    }
-  }
-
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: {
+        redirectTo: window.location.origin,
+      },
     });
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUserRole('user');
-    setCurrentView('marketplace');
   };
 
-  const handleCardClick = async (item) => {
-    setSelectedItem(item);
-    try {
-      await supabase.from('listing_clicks').insert([
-        {
-          listing_id: item.id,
-          owner_id: item.user_id,
-          viewer_id: user ? user.id : null,
-          viewer_email: user ? user.email : 'Guest Visitor'
-        }
-      ]);
-    } catch (err) {
-      console.error('Error logging click:', err);
-    }
-  };
-
-  const handleCreateListing = async (e) => {
-    e.preventDefault();
-    if (!newTitle || !newPrice) return alert('Please fill in title and price!');
-
-    try {
-      setPosting(true);
-      let imageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
-
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('listing-images')
-          .upload(fileName, imageFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: publicURLData } = supabase.storage
-          .from('listing-images')
-          .getPublicUrl(fileName);
-
-        imageUrl = publicURLData.publicUrl;
-      }
-
-      const { error } = await supabase.from('listings').insert([
-        {
-          title: newTitle,
-          description: newDescription,
-          price: parseFloat(newPrice),
-          category: newCategory,
-          city: newCity,
-          phone: newPhone,
-          image_url: imageUrl,
-          user_id: user.id
-        }
-      ]);
-
-      if (error) throw error;
-
-      setNewTitle('');
-      setNewDescription('');
-      setNewPrice('');
-      setNewPhone('');
-      setImageFile(null);
-      setIsModalOpen(false);
-      fetchListings();
-    } catch (err) {
-      alert('Error posting listing: ' + err.message);
-    } finally {
-      setPosting(false);
-    }
-  };
-
-  const handleDeleteListing = async (e, item) => {
-    e.stopPropagation();
-    const canDelete = userRole === 'owner' || userRole === 'admin' || (user && item.user_id === user.id);
-    if (!canDelete) return alert('You do not have permission to delete this listing.');
-
-    if (!confirm('Are you sure you want to delete this listing?')) return;
-
-    try {
-      const { error } = await supabase.from('listings').delete().eq('id', item.id);
-      if (error) throw error;
-      setListings(listings.filter(l => l.id !== item.id));
-      if (selectedItem?.id === item.id) setSelectedItem(null);
-    } catch (err) {
-      alert('Error deleting listing: ' + err.message);
-    }
-  };
+  const categories = [
+    'Vehicles', 
+    'Real Estate', 
+    'Mobile Phones', 
+    'Computers', 
+    'Electronics', 
+    'Home & Furniture', 
+    'Fashion', 
+    'Jobs'
+  ];
 
   const filteredListings = listings.filter((item) => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
@@ -225,75 +86,46 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  const isPrivileged = userRole === 'owner' || userRole === 'admin';
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-      {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-50 shadow-xs">
+      <header className="bg-white border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <a 
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setCurrentView('marketplace');
-                setSearchTerm('');
-                setSelectedCategory('All');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="text-2xl font-black text-orange-600 tracking-tight cursor-pointer"
-            >
-              Kinmel
-            </a>
-            <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-semibold">Nepal</span>
-            {userRole === 'owner' && <span className="text-xs bg-rose-100 text-rose-700 px-2.5 py-1 rounded-full font-bold ml-2 shadow-2xs">Owner Admin</span>}
-            {userRole === 'admin' && <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-bold ml-2 shadow-2xs">Admin</span>}
+            <span className="text-2xl font-extrabold text-orange-600 tracking-tight">Kinmel</span>
+            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Nepal</span>
           </div>
           
           <div className="hidden md:flex flex-1 max-w-md mx-8">
             <div className="relative w-full">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Search size={18} /></span>
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <Search size={18} />
+              </span>
               <input
                 type="text"
                 placeholder="Search phones, cars, rooms, jobs..."
-                className="w-full pl-10 pr-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-50/50"
+                className="w-full pl-10 pr-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            {isPrivileged && (
-              <button
-                onClick={() => {
-                  setCurrentView(currentView === 'admin-dashboard' ? 'marketplace' : 'admin-dashboard');
-                  if (currentView !== 'admin-dashboard') fetchClickLogs();
-                }}
-                className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center transition shadow-2xs ${
-                  currentView === 'admin-dashboard' ? 'bg-gray-900 text-white' : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
-                }`}
-              >
-                <ShieldAlert size={16} className="mr-1.5" /> {currentView === 'admin-dashboard' ? 'Marketplace View' : 'Admin Dashboard'}
-              </button>
-            )}
-
+          <div className="flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center shadow-sm"
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">{user.email}</span>
+                <button 
+                  onClick={handleLogout}
+                  className="text-sm border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-100"
                 >
-                  <PlusCircle size={16} className="mr-1.5" /> Post Ad
-                </button>
-                <span className="text-sm font-medium text-gray-700 hidden lg:inline">{user.email}</span>
-                <button onClick={handleLogout} className="text-sm border border-gray-300 px-3 py-2 rounded-xl hover:bg-gray-100 font-medium text-gray-700">
                   Sign Out
                 </button>
               </div>
             ) : (
-              <button onClick={handleGoogleLogin} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-sm">
+              <button 
+                onClick={handleGoogleLogin}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm"
+              >
                 Sign in
               </button>
             )}
@@ -301,285 +133,71 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main View Router */}
-      {currentView === 'admin-dashboard' && isPrivileged ? (
-        <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full animate-fadeIn">
-          {/* Admin Header Banner */}
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-6 md:p-8 text-white mb-8 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <span className="bg-orange-500/20 text-orange-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2 inline-block">Control Center</span>
-              <h1 className="text-2xl md:text-3xl font-black tracking-tight">Owner & Admin Analytics</h1>
-              <p className="text-gray-400 text-sm mt-1">Real-time oversight of platform engagement, buyer interest, and live listings.</p>
-            </div>
-            <button 
-              onClick={fetchClickLogs} 
-              className="bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center transition border border-white/10 backdrop-blur-md"
+      <section className="bg-gradient-to-r from-orange-600 to-amber-600 text-white py-12 px-4 text-center">
+        <h1 className="text-3xl md:text-4xl font-bold mb-3">Buy and sell, simply across Nepal.</h1>
+        <p className="text-orange-100 max-w-xl mx-auto text-sm md:text-base mb-6">
+          From smartphones and scooters to apartments and jobs. Post free in under a minute.
+        </p>
+      </section>
+
+      <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Explore Categories</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-10">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat === selectedCategory ? 'All' : cat)}
+              className={`p-4 rounded-xl text-center border transition text-sm font-medium ${
+                selectedCategory === cat 
+                  ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm' 
+                  : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+              }`}
             >
-              <RefreshCw size={14} className="mr-2" /> Refresh Stream
+              {cat}
             </button>
-          </div>
-
-          {/* Styled Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs flex items-center justify-between group hover:border-orange-500 transition">
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Live Listings</p>
-                <h3 className="text-4xl font-black text-gray-900">{listings.length}</h3>
-              </div>
-              <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl group-hover:scale-110 transition duration-300"><BarChart3 size={26} /></div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs flex items-center justify-between group hover:border-blue-500 transition">
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Ad Clicks / Views</p>
-                <h3 className="text-4xl font-black text-gray-900">{clickLogs.length}</h3>
-              </div>
-              <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition duration-300"><MousePointerClick size={26} /></div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs flex items-center justify-between group hover:border-rose-500 transition">
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Active User Role</p>
-                <h3 className="text-2xl font-black text-rose-600 capitalize">{userRole} Admin</h3>
-              </div>
-              <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl group-hover:scale-110 transition duration-300"><Users size={26} /></div>
-            </div>
-          </div>
-
-          {/* Click Stream Table */}
-          <div className="bg-white rounded-3xl border border-gray-200/80 shadow-xs overflow-hidden mb-8">
-            <div className="px-6 py-5 border-b bg-gray-50/50 flex items-center justify-between">
-              <h3 className="font-black text-gray-900 text-base flex items-center">
-                <MousePointerClick size={18} className="mr-2 text-orange-600" /> Buyer Ad Click Notifications
-              </h3>
-              <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">Live Feed</span>
-            </div>
-            
-            {loadingClicks ? (
-              <div className="text-center py-16 text-gray-400 font-medium">Fetching interaction stream...</div>
-            ) : clickLogs.length === 0 ? (
-              <div className="text-center py-16 text-gray-400 font-medium">No buyer clicks recorded yet. Try clicking an ad in the marketplace!</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b bg-gray-50/80 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                      <th className="py-4 px-6">Clicked Ad Title</th>
-                      <th className="py-4 px-6">Category</th>
-                      <th className="py-4 px-6">Price</th>
-                      <th className="py-4 px-6">Viewer Gmail / User</th>
-                      <th className="py-4 px-6">Time Clicked</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y text-sm text-gray-700">
-                    {clickLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-50/80 transition">
-                        <td className="py-4 px-6 font-bold text-gray-900">{log.listings?.title || 'Deleted Listing'}</td>
-                        <td className="py-4 px-6">
-                          <span className="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1 rounded-lg font-semibold">
-                            {log.listings?.category || 'N/A'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 font-black text-orange-600">
-                          {log.listings?.price ? `Rs. ${log.listings.price.toLocaleString()}` : 'N/A'}
-                        </td>
-                        <td className="py-4 px-6 font-medium text-gray-900 flex items-center">
-                          <span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-                          {log.viewer_email || 'Guest Visitor'}
-                        </td>
-                        <td className="py-4 px-6 text-xs text-gray-400 font-medium">
-                          {new Date(log.created_at).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </main>
-      ) : (
-        <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
-          {/* Top Title Bar */}
-          <div className="bg-white border border-gray-200/80 rounded-2xl px-6 py-4 mb-6 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl"><Layers size={20} /></div>
-              <div>
-                <h1 className="text-lg font-black text-gray-900 tracking-tight">Buy sell and rent anything</h1>
-                <p className="text-xs text-gray-500">Nepal's trusted local marketplace for buying, selling, and renting.</p>
-              </div>
-            </div>
-            {user && (
-              <button onClick={() => setIsModalOpen(true)} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs shadow-sm transition">
-                + Post Free Ad
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Left Sidebar Categories */}
-            <aside className="lg:col-span-1">
-              <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs sticky top-20">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center">
-                  <LayoutGrid size={15} className="mr-2 text-orange-600" /> Categories
-                </h3>
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setSelectedCategory('All')}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                      selectedCategory === 'All' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100/70'
-                    }`}
-                  >
-                    All Items
-                  </button>
-                  {categories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                        selectedCategory === cat ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100/70'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </aside>
-
-            {/* Right Content Listings */}
-            <div className="lg:col-span-3">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-black text-gray-900">
-                  {selectedCategory === 'All' ? 'Freshly Posted Ads' : `${selectedCategory} Listings`}
-                </h2>
-                <span className="text-xs font-semibold bg-gray-200/70 text-gray-700 px-3 py-1 rounded-full">{filteredListings.length} items</span>
-              </div>
-
-              {loading ? (
-                <div className="text-center py-24 text-gray-500 font-medium">Loading marketplace...</div>
-              ) : filteredListings.length === 0 ? (
-                <div className="text-center py-24 bg-white rounded-2xl border border-gray-200 shadow-xs">
-                  <p className="text-gray-600 font-semibold mb-2">No live listings found matching your criteria.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredListings.map((item) => {
-                    const canModify = isPrivileged || (user && item.user_id === user.id);
-                    return (
-                      <div 
-                        key={item.id} 
-                        onClick={() => handleCardClick(item)}
-                        className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group"
-                      >
-                        <div>
-                          <div className="h-48 bg-gray-100 relative overflow-hidden">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                            <span className="absolute top-3 left-3 bg-black/75 text-white text-xs px-2.5 py-1 rounded-lg font-medium">{item.category}</span>
-                          </div>
-                          <div className="p-4">
-                            <div className="text-lg font-black text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
-                            <h3 className="text-sm font-bold text-gray-800 line-clamp-1 mb-1.5">{item.title}</h3>
-                            <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                          </div>
-                        </div>
-                        <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-3">
-                          <span className="flex items-center font-medium"><MapPin size={13} className="mr-1 text-orange-600" />{item.city || 'Nepal'}</span>
-                          <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
-                            {canModify && (
-                              <button onClick={(e) => handleDeleteListing(e, item)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Delete post">
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* Item Detail Modal */}
-      {selectedItem && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4"><img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" /></div>
-            <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
-            <h2 className="text-2xl font-black text-gray-900 mt-2.5 mb-1">{selectedItem.title}</h2>
-            <div className="text-2xl font-black text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
-            <div className="flex items-center text-sm text-gray-600 mb-5 flex-wrap gap-y-2 bg-gray-50 p-3.5 rounded-xl border border-gray-200/60">
-              <span className="flex items-center mr-4 font-medium"><MapPin size={16} className="mr-1 text-orange-600" />Location: {selectedItem.city || 'Nepal'}</span>
-              {selectedItem.phone && <span className="flex items-center mr-4 font-bold text-gray-900"><Phone size={16} className="mr-1 text-orange-600" />Contact: {selectedItem.phone}</span>}
-            </div>
-            <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-200/60">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h4>
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{selectedItem.description || 'No description provided.'}</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <a href={`https://wa.me/?text=Hi, I am interested in your listing "${selectedItem.title}"`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm flex items-center justify-center shadow-sm">
-                <MessageCircle size={18} className="mr-2" /> WhatsApp Inquiry
-              </a>
-              {selectedItem.phone ? (
-                <a href={`tel:${selectedItem.phone}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
-                  <Phone size={16} className="mr-2" /> Call Owner
-                </a>
-              ) : (
-                <button onClick={() => alert('Owner notified!')} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
-                  Notify Owner
-                </button>
-              )}
-            </div>
-          </div>
+          ))}
         </div>
-      )}
 
-      {/* Post Ad Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <h2 className="text-xl font-black text-gray-900 mb-4">Post a New Ad</h2>
-            <form onSubmit={handleCreateListing} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Ad Title *</label>
-                <input type="text" required placeholder="e.g. Honda Dio Scooter 2022" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Price (NPR) *</label>
-                  <input type="number" required placeholder="e.g. 150000" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Freshly Posted Ads</h2>
+        {loading ? (
+          <div className="text-center py-20 text-gray-500">Loading marketplace listings...</div>
+        ) : filteredListings.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-xl border border-gray-200">
+            <p className="text-gray-500 font-medium">No live listings found matching your criteria.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {filteredListings.map((item) => (
+              <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition">
+                <div className="h-48 bg-gray-100 relative">
+                  <img 
+                    src={item.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30'} 
+                    alt={item.title} 
+                    className="w-full h-full object-cover"
+                  />
+                  {item.is_featured && (
+                    <span className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded font-bold uppercase">
+                      Featured
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Category</label>
-                  <select className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                <div className="p-4">
+                  <div className="text-lg font-bold text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
+                  <h3 className="text-sm font-medium text-gray-800 line-clamp-1 mb-2">{item.title}</h3>
+                  <div className="flex items-center justify-between text-xs text-gray-500 border-t pt-3">
+                    <span className="flex items-center"><MapPin size={12} className="mr-1" />{item.city || 'Kathmandu'}</span>
+                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">City / Location</label>
-                  <input type="text" placeholder="e.g. Dhangadhi" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCity} onChange={(e) => setNewCity(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Contact Phone Number</label>
-                  <input type="text" placeholder="e.g. 9812345678" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Upload Photo</label>
-                <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3.5 py-3 text-sm cursor-pointer hover:bg-gray-50 text-gray-600 transition">
-                  <Upload size={16} className="mr-2 text-orange-600" />
-                  <span className="truncate font-medium">{imageFile ? imageFile.name : 'Choose file...'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setImageFile(e.target.files[0])} />
-                </label>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Description</label>
-                <textarea rows="3" placeholder="Mention condition, features..." className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-5
+            ))}
+          </div>
+        )}
+      </main>
+
+      <footer className="bg-white border-t mt-12 py-6 text-center text-sm text-gray-500">
+        <p>© 2026 Kinmel Nepal · Powered by Supabase & Vercel</p>
+      </footer>
+    </div>
+  );
+}
