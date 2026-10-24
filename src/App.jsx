@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -9,6 +9,13 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+
+  // Navigation view: 'marketplace' or 'admin-dashboard'
+  const [currentView, setCurrentView] = useState('marketplace');
+
+  // Admin Clicks & Analytics State
+  const [clickLogs, setClickLogs] = useState([]);
+  const [loadingClicks, setLoadingClicks] = useState(false);
 
   // State for item detail view modal
   const [selectedItem, setSelectedItem] = useState(null);
@@ -20,7 +27,7 @@ export default function App() {
   const [newPrice, setNewPrice] = useState('');
   const [newCategory, setNewCategory] = useState('Vehicles');
   const [newCity, setNewCity] = useState('Dhangadhi');
-  const [newPhone, setNewPhone] = useState(''); // Added phone state
+  const [newPhone, setNewPhone] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [posting, setPosting] = useState(false);
 
@@ -44,6 +51,7 @@ export default function App() {
         fetchUserRole(currentUser.id);
       } else {
         setUserRole('user');
+        setCurrentView('marketplace');
       }
 
       if (window.location.hash) {
@@ -92,6 +100,35 @@ export default function App() {
     }
   }
 
+  async function fetchClickLogs() {
+    try {
+      setLoadingClicks(true);
+      const { data, error } = await supabase
+        .from('listing_clicks')
+        .select(`
+          id,
+          created_at,
+          viewer_id,
+          listings (
+            id,
+            title,
+            price,
+            category,
+            city,
+            user_id
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setClickLogs(data || []);
+    } catch (err) {
+      console.error('Error fetching click logs:', err.message);
+    } finally {
+      setLoadingClicks(false);
+    }
+  }
+
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -104,12 +141,13 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUserRole('user');
+    setCurrentView('marketplace');
   };
 
   const handleCardClick = async (item) => {
     setSelectedItem(item);
 
-    // Record click notification for the owner
+    // Record click notification for the owner / admin analytics
     try {
       await supabase.from('listing_clicks').insert([
         {
@@ -156,7 +194,7 @@ export default function App() {
           price: parseFloat(newPrice),
           category: newCategory,
           city: newCity,
-          phone: newPhone, // Saving phone number
+          phone: newPhone,
           image_url: imageUrl,
           user_id: user.id
         }
@@ -214,6 +252,7 @@ export default function App() {
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+                setCurrentView('marketplace');
                 setSearchTerm('');
                 setSelectedCategory('All');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -246,7 +285,24 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            {isPrivileged && (
+              <button
+                onClick={() => {
+                  setCurrentView(currentView === 'admin-dashboard' ? 'marketplace' : 'admin-dashboard');
+                  if (currentView !== 'admin-dashboard') fetchClickLogs();
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center transition shadow-sm ${
+                  currentView === 'admin-dashboard' 
+                    ? 'bg-gray-800 text-white' 
+                    : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
+                }`}
+              >
+                <ShieldAlert size={16} className="mr-1.5" /> 
+                {currentView === 'admin-dashboard' ? 'Marketplace View' : 'Admin Dashboard'}
+              </button>
+            )}
+
             {user ? (
               <div className="flex items-center space-x-3">
                 <button
@@ -275,109 +331,207 @@ export default function App() {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-orange-600 to-amber-600 text-white py-12 px-4 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold mb-3">Buy and sell, simply across Nepal.</h1>
-        <p className="text-orange-100 max-w-xl mx-auto text-sm md:text-base mb-6">
-          From smartphones and scooters to apartments and jobs. Click any ad to view details & connect!
-        </p>
-        {user && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-6 py-2.5 rounded-xl text-sm shadow-md transition"
-          >
-            + Post Your Free Ad Now
-          </button>
-        )}
-      </section>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Explore Categories</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-10">
-          <button
-            onClick={() => setSelectedCategory('All')}
-            className={`p-4 rounded-xl text-center border transition text-sm font-medium ${
-              selectedCategory === 'All' ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            All Items
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat === selectedCategory ? 'All' : cat)}
-              className={`p-4 rounded-xl text-center border transition text-sm font-medium ${
-                selectedCategory === cat 
-                  ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm' 
-                  : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
-              }`}
+      {/* Main View Router */}
+      {currentView === 'admin-dashboard' && isPrivileged ? (
+        /* ================= ADMIN DASHBOARD PANEL ================= */
+        <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Owner & Admin Control Center</h1>
+              <p className="text-sm text-gray-500">Monitor platform activity, listing engagement, and buyer interest notifications.</p>
+            </div>
+            <button 
+              onClick={fetchClickLogs}
+              className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-lg font-medium hover:bg-gray-50 shadow-sm"
             >
-              {cat}
+              Refresh Data
             </button>
-          ))}
-        </div>
+          </div>
 
-        <h2 className="text-xl font-bold text-gray-800 mb-6">Freshly Posted Ads (Click to View)</h2>
-        {loading ? (
-          <div className="text-center py-20 text-gray-500">Loading marketplace listings...</div>
-        ) : filteredListings.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-xl border border-gray-200 shadow-sm">
-            <p className="text-gray-500 font-medium mb-2">No live listings found matching your criteria.</p>
-            {user && (
-              <button onClick={() => setIsModalOpen(true)} className="text-orange-600 text-sm font-semibold hover:underline">
-                Be the first to post an ad!
-              </button>
+          {/* Quick Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Live Listings</p>
+                <h3 className="text-3xl font-extrabold text-gray-900">{listings.length}</h3>
+              </div>
+              <div className="p-3 bg-orange-50 text-orange-600 rounded-xl"><BarChart3 size={24} /></div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Ad Clicks / Views</p>
+                <h3 className="text-3xl font-extrabold text-gray-900">{clickLogs.length}</h3>
+              </div>
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><MousePointerClick size={24} /></div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Active User Role</p>
+                <h3 className="text-xl font-bold text-orange-600 capitalize">{userRole} Admin</h3>
+              </div>
+              <div className="p-3 bg-red-50 text-red-600 rounded-xl"><Users size={24} /></div>
+            </div>
+          </div>
+
+          {/* Click Notifications Table */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-base flex items-center">
+                <MousePointerClick size={18} className="mr-2 text-orange-600" /> Buyer Ad Click Notifications
+              </h3>
+              <span className="text-xs text-gray-500">Live interaction stream</span>
+            </div>
+
+            {loadingClicks ? (
+              <div className="text-center py-12 text-gray-500">Loading click logs...</div>
+            ) : clickLogs.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">No ad clicks recorded yet. Try clicking an ad in the marketplace!</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b bg-gray-50/70 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="py-3 px-6">Clicked Ad Title</th>
+                      <th className="py-3 px-6">Category</th>
+                      <th className="py-3 px-6">Price</th>
+                      <th className="py-3 px-6">Viewer ID / User</th>
+                      <th className="py-3 px-6">Time Clicked</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y text-sm text-gray-700">
+                    {clickLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50 transition">
+                        <td className="py-3 px-6 font-semibold text-gray-900">{log.listings?.title || 'Deleted Listing'}</td>
+                        <td className="py-3 px-6">
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-medium">
+                            {log.listings?.category || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-6 font-medium text-orange-600">
+                          {log.listings?.price ? `Rs. ${log.listings.price.toLocaleString()}` : 'N/A'}
+                        </td>
+                        <td className="py-3 px-6 text-xs text-gray-500 font-mono">
+                          {log.viewer_id ? `${log.viewer_id.substring(0, 12)}...` : 'Guest Visitor'}
+                        </td>
+                        <td className="py-3 px-6 text-xs text-gray-500">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredListings.map((item) => {
-              const canModify = isPrivileged || (user && item.user_id === user.id);
-              return (
-                <div 
-                  key={item.id} 
-                  onClick={() => handleCardClick(item)}
-                  className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer group"
+        </main>
+      ) : (
+        /* ================= MARKETPLACE VIEW ================= */
+        <>
+          {/* Hero Section */}
+          <section className="bg-gradient-to-r from-orange-600 to-amber-600 text-white py-12 px-4 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold mb-3">Buy and sell, simply across Nepal.</h1>
+            <p className="text-orange-100 max-w-xl mx-auto text-sm md:text-base mb-6">
+              From smartphones and scooters to apartments and jobs. Click any ad to view details & connect!
+            </p>
+            {user && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-6 py-2.5 rounded-xl text-sm shadow-md transition"
+              >
+                + Post Your Free Ad Now
+              </button>
+            )}
+          </section>
+
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Explore Categories</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-10">
+              <button
+                onClick={() => setSelectedCategory('All')}
+                className={`p-4 rounded-xl text-center border transition text-sm font-medium ${
+                  selectedCategory === 'All' ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                All Items
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat === selectedCategory ? 'All' : cat)}
+                  className={`p-4 rounded-xl text-center border transition text-sm font-medium ${
+                    selectedCategory === cat 
+                      ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm' 
+                      : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  <div>
-                    <div className="h-48 bg-gray-100 relative overflow-hidden">
-                      <img 
-                        src={item.image_url} 
-                        alt={item.title} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                      />
-                      <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded font-medium">
-                        {item.category}
-                      </span>
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-6">Freshly Posted Ads (Click to View)</h2>
+            {loading ? (
+              <div className="text-center py-20 text-gray-500">Loading marketplace listings...</div>
+            ) : filteredListings.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-xl border border-gray-200 shadow-sm">
+                <p className="text-gray-500 font-medium mb-2">No live listings found matching your criteria.</p>
+                {user && (
+                  <button onClick={() => setIsModalOpen(true)} className="text-orange-600 text-sm font-semibold hover:underline">
+                    Be the first to post an ad!
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {filteredListings.map((item) => {
+                  const canModify = isPrivileged || (user && item.user_id === user.id);
+                  return (
+                    <div 
+                      key={item.id} 
+                      onClick={() => handleCardClick(item)}
+                      className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer group"
+                    >
+                      <div>
+                        <div className="h-48 bg-gray-100 relative overflow-hidden">
+                          <img 
+                            src={item.image_url} 
+                            alt={item.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          />
+                          <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded font-medium">
+                            {item.category}
+                          </span>
+                        </div>
+                        <div className="p-4">
+                          <div className="text-lg font-bold text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
+                          <h3 className="text-sm font-medium text-gray-800 line-clamp-1 mb-2">{item.title}</h3>
+                          <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
+                        </div>
+                      </div>
+                      <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t pt-3">
+                        <span className="flex items-center"><MapPin size={12} className="mr-1" />{item.city || 'Nepal'}</span>
+                        <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                          <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                          {canModify && (
+                            <button 
+                              onClick={(e) => handleDeleteListing(e, item)}
+                              className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-md"
+                              title="Delete post"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-4">
-                      <div className="text-lg font-bold text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
-                      <h3 className="text-sm font-medium text-gray-800 line-clamp-1 mb-2">{item.title}</h3>
-                      <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                    </div>
-                  </div>
-                  <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t pt-3">
-                    <span className="flex items-center"><MapPin size={12} className="mr-1" />{item.city || 'Nepal'}</span>
-                    <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                      <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                      {canModify && (
-                        <button 
-                          onClick={(e) => handleDeleteListing(e, item)}
-                          className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-md"
-                          title="Delete post"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
+                  );
+                })}
+              </div>
+            )}
+          </main>
+        </>
+      )}
 
       {/* Item Detail / Notification Modal */}
       {selectedItem && (
@@ -494,7 +648,7 @@ export default function App() {
                     placeholder="e.g. Dhangadhi" 
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
                     value={newCity}
-                    onChange={(e) => setNewCity(e.target.value)}
+                    onChange={(e) => /^[a-zA-Z\s]*$/.test(e.target.value) && setNewCity(e.target.value)}
                   />
                 </div>
                 <div>
