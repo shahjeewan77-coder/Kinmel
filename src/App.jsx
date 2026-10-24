@@ -10,13 +10,22 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
-    // Check active session
+    // 1. Check active session on load and clean up the OAuth hash tokens
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      
+      if (session && window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     });
 
+    // 2. Listen for auth changes and clean up URL hash on sign in
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     });
 
     fetchListings();
