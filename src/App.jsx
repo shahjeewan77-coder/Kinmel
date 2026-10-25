@@ -28,7 +28,7 @@ export default function App() {
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newPrice, setNewPrice] = useState('');
-  const [newCategory, setNewCategory] = useState('Vehicles');
+  const [newCategory, setNewCategory] = useState('Construction');
   const [newCity, setNewCity] = useState('Dhangadhi');
   const [newPhone, setNewPhone] = useState('');
   const [newNegotiable, setNewNegotiable] = useState(true);
@@ -357,7 +357,7 @@ export default function App() {
     }
   };
 
-  // In-app Role Assignment Function for Owner
+  // In-app Role Assignment Function for Owner (Supports direct email lookup from listings or click logs)
   const handleAssignRoleFromApp = async (e) => {
     e.preventDefault();
     if (!isOwner) return alert('Only the Owner can assign roles.');
@@ -365,28 +365,64 @@ export default function App() {
 
     try {
       setUpdatingRole(true);
-      
-      const { data: userData, error: userError } = await supabase
+      const emailToAssign = targetEmail.trim().toLowerCase();
+
+      let targetUserId = null;
+
+      // 1. Check existing user_roles
+      const { data: existingRoleData } = await supabase
         .from('user_roles')
         .select('id')
-        .eq('email', targetEmail.trim().toLowerCase())
+        .eq('email', emailToAssign)
         .maybeSingle();
 
-      let targetUserId = userData?.id;
+      if (existingRoleData) {
+        targetUserId = existingRoleData.id;
+      } else {
+        // 2. Check if user has interacted/clicked listings
+        const { data: clickData } = await supabase
+          .from('listing_clicks')
+          .select('viewer_id')
+          .eq('viewer_email', emailToAssign)
+          .not('viewer_id', 'is', null)
+          .limit(1);
+
+        if (clickData && clickData.length > 0) {
+          targetUserId = clickData[0].viewer_id;
+        } else {
+          // 3. Check if user has posted any listings
+          const { data: listingUserData } = await supabase
+            .from('listings')
+            .select('user_id')
+            .eq('user_id', emailToAssign) // if user_id happens to store email or we check auth mapping
+            .limit(1);
+          
+          // Fallback: query auth via RPC or fallback to reminder
+          const { data: generalClick } = await supabase
+            .from('listing_clicks')
+            .select('viewer_id, viewer_email')
+            .ilike('viewer_email', emailToAssign)
+            .limit(1);
+
+          if (generalClick && generalClick.length > 0) {
+            targetUserId = generalClick[0].viewer_id;
+          }
+        }
+      }
 
       if (!targetUserId) {
-        return alert('User must sign into Kinmel Nepal with this email at least once before assigning a role!');
+        return alert('User must sign into [Kinmel Nepal](https://kinmel-delta.vercel.app/#) with this email at least once (or post an ad) before assigning a role!');
       }
 
       const { error: upsertError } = await supabase
         .from('user_roles')
         .upsert([
-          { id: targetUserId, email: targetEmail.trim().toLowerCase(), role: assignedRoleSelect }
+          { id: targetUserId, email: emailToAssign, role: assignedRoleSelect }
         ], { onConflict: ['id'] });
 
       if (upsertError) throw upsertError;
 
-      alert(`Successfully assigned role '${assignedRoleSelect}' to ${targetEmail}!`);
+      alert(`Successfully assigned role '${assignedRoleSelect}' to ${emailToAssign}!`);
       setTargetEmail('');
       fetchTeamMembers();
     } catch (err) {
@@ -973,197 +1009,4 @@ export default function App() {
                             </span>
                             {isSold && (
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <span className="bg-red-600 text-white font-black text-sm px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg">SOLD</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <div className="text-lg font-black text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
-                            <h3 className="text-sm font-bold text-gray-800 line-clamp-1 mb-1.5">{item.title}</h3>
-                            <p className="text-xs text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                          </div>
-                        </div>
-                        <div className="px-4 pb-4 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-3">
-                          <span className="flex items-center font-medium"><MapPin size={13} className="mr-1 text-orange-600" />{item.city || 'Nepal'}</span>
-                          <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
-                            {canModify && (
-                              <div className="flex items-center space-x-1">
-                                {isEditor && (
-                                  <button onClick={() => openEditModal(item)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition" title="Edit post">
-                                    <Edit3 size={14} />
-                                  </button>
-                                )}
-                                {canDelete && (
-                                  <button onClick={(e) => handleDeleteListing(e, item)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Delete post">
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* Item Detail Modal */}
-      {selectedItem && (
-        <div 
-          onClick={() => setSelectedItem(null)} 
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()} 
-            className="bg-white rounded-3xl max-w-xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto cursor-default"
-          >
-            <button 
-              onClick={() => setSelectedItem(null)} 
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 p-2.5 rounded-full transition z-10"
-              title="Close"
-            >
-              <X size={20} />
-            </button>
-            <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
-              <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
-              {selectedItem.status === 'Sold' && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span className="bg-red-600 text-white font-black text-lg px-6 py-2 rounded-full uppercase tracking-wider">SOLD</span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
-              <div className="flex items-center space-x-2">
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.negotiable ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
-                  {selectedItem.negotiable ? 'Negotiable' : 'Fixed Price'}
-                </span>
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                  Status: {selectedItem.status || 'Active'}
-                </span>
-              </div>
-            </div>
-            <h2 className="text-2xl font-black text-gray-900 mt-2.5 mb-1">{selectedItem.title}</h2>
-            <div className="text-2xl font-black text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
-            <div className="flex items-center text-sm text-gray-600 mb-5 flex-wrap gap-y-2 bg-gray-50 p-3.5 rounded-xl border border-gray-200/60">
-              <span className="flex items-center mr-4 font-medium"><MapPin size={16} className="mr-1 text-orange-600" />Location: {selectedItem.city || 'Nepal'}</span>
-              {selectedItem.phone && <span className="flex items-center mr-4 font-bold text-gray-900"><Phone size={16} className="mr-1 text-orange-600" />Contact: {selectedItem.phone}</span>}
-            </div>
-            <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-200/60">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h4>
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{selectedItem.description || 'No description provided.'}</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <a 
-                href={`https://wa.me/${selectedItem.phone ? selectedItem.phone.replace(/[^0-9]/g, '') : ''}`} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm flex items-center justify-center shadow-sm"
-              >
-                <MessageCircle size={18} className="mr-2" /> WhatsApp Chat
-              </a>
-              {selectedItem.phone ? (
-                <a href={`tel:${selectedItem.phone}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
-                  <Phone size={16} className="mr-2" /> Call Owner
-                </a>
-              ) : (
-                <button onClick={() => alert('Owner notified!')} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
-                  Notify Owner
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Post / Edit Ad Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <h2 className="text-xl font-black text-gray-900 mb-4">{editingItem ? 'Edit Listing' : 'Post a New Ad'}</h2>
-            <form onSubmit={handleSaveListing} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Item Title *</label>
-                <input type="text" required placeholder="e.g. Concrete Mixer / Honda Dio" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Price / Rate (NPR) *</label>
-                  <input type="number" required placeholder="e.g. 5000" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Category</label>
-                  <select className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">City / Location</label>
-                  <input type="text" placeholder="e.g. Dhangadhi" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCity} onChange={(e) => setNewCity(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Contact Phone Number</label>
-                  <input type="text" placeholder="e.g. 9812345678" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Price Type</label>
-                <div className="flex items-center space-x-4 pt-1">
-                  <label className="flex items-center cursor-pointer text-sm font-semibold text-gray-700">
-                    <input 
-                      type="radio" 
-                      name="negotiable" 
-                      checked={newNegotiable === true} 
-                      onChange={() => setNewNegotiable(true)} 
-                      className="mr-2 text-orange-600 focus:ring-orange-500" 
-                    />
-                    Negotiable
-                  </label>
-                  <label className="flex items-center cursor-pointer text-sm font-semibold text-gray-700">
-                    <input 
-                      type="radio" 
-                      name="negotiable" 
-                      checked={newNegotiable === false} 
-                      onChange={() => setNewNegotiable(false)} 
-                      className="mr-2 text-orange-600 focus:ring-orange-500" 
-                    />
-                    Not Negotiable (Fixed)
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Upload Photo</label>
-                <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3.5 py-3 text-sm cursor-pointer hover:bg-gray-50 text-gray-600 transition">
-                  <Upload size={16} className="mr-2 text-orange-600" />
-                  <span className="truncate font-medium">{imageFile ? imageFile.name : (editingItem ? 'Keep existing photo or choose new...' : 'Choose file...')}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setImageFile(e.target.files[0])} />
-                </label>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Description</label>
-                <textarea rows="3" placeholder="Mention condition, terms, features..." className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
-              </div>
-              <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm transition">
-                {posting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <footer className="bg-white border-t mt-12 py-6 text-center text-sm text-gray-500 font-medium px-4">
-        <p className="mb-1">Make deals by directly contacting the owner. For any assistance, our team is ready for you!</p>
-        <p className="text-xs text-gray-400">© 2026 Kinmel Nepal · Powered by Supabase & Vercel</p>
-      </footer>
-    </div>
-  );
-}
+                                <span className="bg-red-600 text-white font-black text-sm px-4 py-1.5 rounded-full uppercase tracking
