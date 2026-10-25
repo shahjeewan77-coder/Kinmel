@@ -570,8 +570,13 @@ export default function App() {
               <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{selectedItem.description || 'No description provided.'}</p>
             </div>
             <div className="flex items-center space-x-3">
-              <a href={`https://wa.me/?text=Hi, I am interested in your listing "${selectedItem.title}"`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm flex items-center justify-center shadow-sm">
-                <MessageCircle size={18} className="mr-2" /> WhatsApp Inquiry
+              <a 
+                href={`https://wa.me/${selectedItem.phone ? selectedItem.phone.replace(/[^0-9]/g, '') : ''}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm flex items-center justify-center shadow-sm"
+              >
+                <MessageCircle size={18} className="mr-2" /> WhatsApp Chat
               </a>
               {selectedItem.phone ? (
                 <a href={`tel:${selectedItem.phone}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
