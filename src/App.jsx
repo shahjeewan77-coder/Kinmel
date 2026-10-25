@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2, UserCheck, Tag, Edit3 } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2, UserCheck, Tag, Edit3, Download } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -12,9 +12,13 @@ export default function App() {
 
   const [appMode, setAppMode] = useState(null);
 
-  const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
+  const [currentView, setCurrentView] = useState('marketplace');
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   // Post / Edit Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,6 +36,15 @@ export default function App() {
   const categories = ['Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
 
   useEffect(() => {
+    // Capture PWA install prompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -59,8 +72,24 @@ export default function App() {
 
     fetchListings();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      alert('To install this app on mobile, tap your browser menu (three dots) and select "Add to Home Screen" or "Install App".');
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setShowInstallBanner(false);
+    }
+  };
 
   async function fetchUserRole(userId) {
     try {
@@ -339,8 +368,25 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
         <div className="max-w-4xl w-full text-center">
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">[Kinmel Nepal](https://kinmel-delta.vercel.app/#)</h1>
-          <p className="text-lg md:text-xl text-orange-100 mb-12">Make deals securely by contacting owners directly. Choose your section below:</p>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
+          <p className="text-lg md:text-xl text-orange-100 mb-8">Make deals securely by contacting owners directly. Choose your section below:</p>
+
+          {/* Download App Prompt Banner */}
+          <div className="mb-8 max-w-md mx-auto bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-md flex items-center justify-between shadow-lg">
+            <div className="flex items-center space-x-3 text-left">
+              <div className="bg-white text-orange-600 p-2.5 rounded-xl font-black"><Download size={20} /></div>
+              <div>
+                <h4 className="font-bold text-sm">Install Kinmel App</h4>
+                <p className="text-xs text-orange-100">Get quick access right from your home screen!</p>
+              </div>
+            </div>
+            <button 
+              onClick={handleInstallClick}
+              className="bg-white text-orange-600 hover:bg-orange-50 text-xs font-black px-4 py-2.5 rounded-xl shadow transition whitespace-nowrap"
+            >
+              Download
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
             <div 
@@ -440,6 +486,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Quick Download App Button in Header */}
+            <button
+              onClick={handleInstallClick}
+              className="hidden lg:flex items-center text-xs bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 px-3 py-2 rounded-xl font-bold transition"
+            >
+              <Download size={14} className="mr-1.5" /> Download App
+            </button>
+
             {user && (
               <button
                 onClick={() => setCurrentView(currentView === 'my-dashboard' ? 'marketplace' : 'my-dashboard')}
