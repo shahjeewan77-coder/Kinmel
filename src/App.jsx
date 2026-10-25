@@ -192,7 +192,7 @@ export default function App() {
   const handleCardClick = async (item) => {
     setSelectedItem(item);
     try {
-      await supabase.from('listing_clicks'].insert([
+      await supabase.from('listing_clicks').insert([
         {
           listing_id: item.id,
           owner_id: item.user_id,
