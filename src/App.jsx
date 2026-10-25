@@ -2,15 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag } from 'lucide-react';
 
-// Register Service Worker so mobile Chrome allows app installation
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.log('Service worker registration failed: ', err);
-    });
-  });
-}
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('user');
@@ -53,7 +44,16 @@ export default function App() {
 
   const categories = ['Construction', 'Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
 
+  // Register Service Worker & Handle Install Prompt safely on mount
   useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.log('Service worker registration failed: ', err);
+        });
+      });
+    }
+
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
 
@@ -380,7 +380,7 @@ export default function App() {
     try {
       setUpdatingRole(true);
       
-      const { data: userData, error: userError } = await supabase
+      const { data: userData } = await supabase
         .from('user_roles')
         .select('id')
         .eq('email', targetEmail.trim().toLowerCase())
