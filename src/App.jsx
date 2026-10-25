@@ -16,6 +16,9 @@ export default function App() {
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
+  // Team Roles State for Directory Management
+  const [teamMembers, setTeamMembers] = useState([]);
+
   // Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
@@ -37,7 +40,7 @@ export default function App() {
   const [assignedRoleSelect, setAssignedRoleSelect] = useState('admin');
   const [updatingRole, setUpdatingRole] = useState(false);
 
-  const categories = ['Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
+  const categories = ['Construction', 'Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
@@ -152,6 +155,20 @@ export default function App() {
     }
   }
 
+  async function fetchTeamMembers() {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('*')
+        .order('role', { ascending: true });
+
+      if (error) throw error;
+      setTeamMembers(data || []);
+    } catch (err) {
+      console.error('Error fetching team members:', err.message);
+    }
+  }
+
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -190,8 +207,8 @@ export default function App() {
     setNewCity(item.city || 'Dhangadhi');
     setNewPhone(item.phone || '');
     setNewNegotiable(item.negotiable ?? true);
-    const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Vehicles';
-    setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Vehicles');
+    const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Construction';
+    setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Construction');
     setImageFile(null);
     setIsModalOpen(true);
   };
@@ -204,7 +221,7 @@ export default function App() {
     setNewCity('Dhangadhi');
     setNewPhone('');
     setNewNegotiable(true);
-    setNewCategory('Vehicles');
+    setNewCategory('Construction');
     setImageFile(null);
     setIsModalOpen(true);
   };
@@ -349,8 +366,6 @@ export default function App() {
     try {
       setUpdatingRole(true);
       
-      // 1. Fetch user ID from auth.users (requires admin query or matching user record)
-      // Alternatively, upsert directly using email if table allows or lookup user profile
       const { data: userData, error: userError } = await supabase
         .from('user_roles')
         .select('id')
@@ -360,8 +375,6 @@ export default function App() {
       let targetUserId = userData?.id;
 
       if (!targetUserId) {
-        // Try fetching from auth users table via an RPC or query if permitted, 
-        // or notify to have the user sign in first.
         return alert('User must sign into Kinmel Nepal with this email at least once before assigning a role!');
       }
 
@@ -375,10 +388,45 @@ export default function App() {
 
       alert(`Successfully assigned role '${assignedRoleSelect}' to ${targetEmail}!`);
       setTargetEmail('');
+      fetchTeamMembers();
     } catch (err) {
       alert('Error updating role: ' + err.message);
     } finally {
       setUpdatingRole(false);
+    }
+  };
+
+  const handleUpdateMemberRole = async (memberId, newRole) => {
+    if (!isOwner) return alert('Only the Owner can modify roles.');
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ role: newRole })
+        .eq('id', memberId);
+
+      if (error) throw error;
+      alert('Role updated successfully!');
+      fetchTeamMembers();
+    } catch (err) {
+      alert('Error updating role: ' + err.message);
+    }
+  };
+
+  const handleDeleteTeamMember = async (memberId, memberEmail) => {
+    if (!isOwner) return alert('Only the Owner can remove team members.');
+    if (!confirm(`Are you sure you want to remove role permissions for ${memberEmail}?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('id', memberId);
+
+      if (error) throw error;
+      alert('Team member role removed successfully!');
+      fetchTeamMembers();
+    } catch (err) {
+      alert('Error removing member: ' + err.message);
     }
   };
 
@@ -556,7 +604,10 @@ export default function App() {
               <button
                 onClick={() => {
                   setCurrentView(currentView === 'admin-dashboard' ? 'marketplace' : 'admin-dashboard');
-                  if (currentView !== 'admin-dashboard') fetchClickLogs();
+                  if (currentView !== 'admin-dashboard') {
+                    fetchClickLogs();
+                    if (isOwner) fetchTeamMembers();
+                  }
                 }}
                 className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center transition shadow-2xs relative ${
                   currentView === 'admin-dashboard' ? 'bg-gray-900 text-white' : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
@@ -703,14 +754,15 @@ export default function App() {
             </div>
           </div>
 
-          {/* Owner Role Management Box */}
+          {/* Owner Role Management & Directory Box */}
           {isOwner && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8 p-6">
               <h3 className="font-bold text-gray-900 text-base mb-1 flex items-center">
                 <Users size={18} className="mr-2 text-orange-600" /> Quick Team Role Manager
               </h3>
               <p className="text-xs text-gray-500 mb-4">Assign team roles directly from here after the member signs in once.</p>
-              <form onSubmit={handleAssignRoleFromApp} className="flex flex-col sm:flex-row gap-3">
+              
+              <form onSubmit={handleAssignRoleFromApp} className="flex flex-col sm:flex-row gap-3 mb-6">
                 <input 
                   type="email" 
                   required 
@@ -736,6 +788,46 @@ export default function App() {
                   {updatingRole ? 'Updating...' : 'Assign Role'}
                 </button>
               </form>
+
+              {/* Team Members List Table */}
+              <div className="border rounded-xl overflow-hidden mt-6">
+                <div className="bg-gray-50 px-4 py-3 border-b text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                  <span>Registered Team Email</span>
+                  <span>Role & Actions</span>
+                </div>
+                {teamMembers.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-gray-400">
+                    <button onClick={fetchTeamMembers} className="text-orange-600 underline font-semibold">Click to load team members directory</button>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {teamMembers.map(member => (
+                      <div key={member.id} className="px-4 py-3 flex items-center justify-between text-sm hover:bg-gray-50/50">
+                        <span className="font-medium text-gray-800">{member.email || member.id}</span>
+                        <div className="flex items-center space-x-3">
+                          <select 
+                            value={member.role}
+                            onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
+                            className="border rounded-lg px-2.5 py-1 text-xs font-semibold bg-white outline-none"
+                          >
+                            <option value="owner">Owner</option>
+                            <option value="admin">Admin</option>
+                            <option value="editor">Editor</option>
+                            <option value="responder">Responder</option>
+                          </select>
+                          <button 
+                            onClick={() => handleDeleteTeamMember(member.id, member.email)}
+                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg bg-red-50 transition"
+                            title="Remove role"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
