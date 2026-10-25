@@ -96,7 +96,7 @@ export default function App() {
         .single();
 
       if (data) {
-        setUserRole(data.role.toLowerCase()); // 'admin', 'editor', 'responder', etc.
+        setUserRole(data.role.toLowerCase());
       }
     } catch (err) {
       setUserRole('user');
@@ -859,4 +859,131 @@ export default function App() {
               )}
             </div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs bg-orange-100 text-
+              <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
+              <div className="flex items-center space-x-2">
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.negotiable ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                  {selectedItem.negotiable ? 'Negotiable' : 'Fixed Price'}
+                </span>
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  Status: {selectedItem.status || 'Active'}
+                </span>
+              </div>
+            </div>
+            <h2 className="text-2xl font-black text-gray-900 mt-2.5 mb-1">{selectedItem.title}</h2>
+            <div className="text-2xl font-black text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
+            <div className="flex items-center text-sm text-gray-600 mb-5 flex-wrap gap-y-2 bg-gray-50 p-3.5 rounded-xl border border-gray-200/60">
+              <span className="flex items-center mr-4 font-medium"><MapPin size={16} className="mr-1 text-orange-600" />Location: {selectedItem.city || 'Nepal'}</span>
+              {selectedItem.phone && <span className="flex items-center mr-4 font-bold text-gray-900"><Phone size={16} className="mr-1 text-orange-600" />Contact: {selectedItem.phone}</span>}
+            </div>
+            <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-200/60">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{selectedItem.description || 'No description provided.'}</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <a 
+                href={`https://wa.me/${selectedItem.phone ? selectedItem.phone.replace(/[^0-9]/g, '') : ''}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm flex items-center justify-center shadow-sm"
+              >
+                <MessageCircle size={18} className="mr-2" /> WhatsApp Chat
+              </a>
+              {selectedItem.phone ? (
+                <a href={`tel:${selectedItem.phone}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
+                  <Phone size={16} className="mr-2" /> Call Owner
+                </a>
+              ) : (
+                <button onClick={() => alert('Owner notified!')} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center">
+                  Notify Owner
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post / Edit Ad Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+            <h2 className="text-xl font-black text-gray-900 mb-4">{editingItem ? 'Edit Listing' : 'Post a New Ad'}</h2>
+            <form onSubmit={handleSaveListing} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Item Title *</label>
+                <input type="text" required placeholder="e.g. Concrete Mixer / Honda Dio" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Price / Rate (NPR) *</label>
+                  <input type="number" required placeholder="e.g. 5000" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Category</label>
+                  <select className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">City / Location</label>
+                  <input type="text" placeholder="e.g. Dhangadhi" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCity} onChange={(e) => setNewCity(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Contact Phone Number</label>
+                  <input type="text" placeholder="e.g. 9812345678" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Price Type</label>
+                <div className="flex items-center space-x-4 pt-1">
+                  <label className="flex items-center cursor-pointer text-sm font-semibold text-gray-700">
+                    <input 
+                      type="radio" 
+                      name="negotiable" 
+                      checked={newNegotiable === true} 
+                      onChange={() => setNewNegotiable(true)} 
+                      className="mr-2 text-orange-600 focus:ring-orange-500" 
+                    />
+                    Negotiable
+                  </label>
+                  <label className="flex items-center cursor-pointer text-sm font-semibold text-gray-700">
+                    <input 
+                      type="radio" 
+                      name="negotiable" 
+                      checked={newNegotiable === false} 
+                      onChange={() => setNewNegotiable(false)} 
+                      className="mr-2 text-orange-600 focus:ring-orange-500" 
+                    />
+                    Not Negotiable (Fixed)
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Upload Photo</label>
+                <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3.5 py-3 text-sm cursor-pointer hover:bg-gray-50 text-gray-600 transition">
+                  <Upload size={16} className="mr-2 text-orange-600" />
+                  <span className="truncate font-medium">{imageFile ? imageFile.name : (editingItem ? 'Keep existing photo or choose new...' : 'Choose file...')}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setImageFile(e.target.files[0])} />
+                </label>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Description</label>
+                <textarea rows="3" placeholder="Mention condition, terms, features..." className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
+              </div>
+              <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm transition">
+                {posting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <footer className="bg-white border-t mt-12 py-6 text-center text-sm text-gray-500 font-medium px-4">
+        <p className="mb-1">Make deals by directly contacting the owner. For any assistance, our team is ready for you!</p>
+        <p className="text-xs text-gray-400">© 2026 Kinmel Nepal · Powered by Supabase & Vercel</p>
+      </footer>
+    </div>
+  );
+}
