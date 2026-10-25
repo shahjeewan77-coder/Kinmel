@@ -12,7 +12,7 @@ export default function App() {
 
   const [appMode, setAppMode] = useState(null);
 
-  const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
+  const [currentView, setCurrentView] = useState('marketplace');
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
@@ -185,7 +185,8 @@ export default function App() {
           image_url: imageUrl,
           user_id: user.id,
           is_approved: isPrivileged,
-          status: 'Active'
+          status: 'Active',
+          sold_at: null
         }
       ]);
 
@@ -222,10 +223,10 @@ export default function App() {
 
   const handleToggleStatus = async (item) => {
     const newStatus = item.status === 'Sold' ? 'Active' : 'Sold';
-    const updatePayload = { status: newStatus };
-    if (newStatus === 'Sold') {
-      updatePayload.sold_at = new Date().toISOString();
-    }
+    const updatePayload = { 
+      status: newStatus,
+      sold_at: newStatus === 'Sold' ? new Date().toISOString() : null
+    };
 
     try {
       const { error } = await supabase
@@ -262,6 +263,7 @@ export default function App() {
   const filteredListings = listings.filter((item) => {
     if (!isPrivileged && !item.is_approved) return false;
 
+    // Keep sold items visible for 24 hours, then hide
     if (item.status === 'Sold' && item.sold_at) {
       const soldTime = new Date(item.sold_at).getTime();
       const now = new Date().getTime();
@@ -699,7 +701,7 @@ export default function App() {
         </main>
       )}
 
-      {/* Item Detail Modal with Fixed Close Handler */}
+      {/* Item Detail Modal */}
       {selectedItem && (
         <div 
           onClick={() => setSelectedItem(null)} 
