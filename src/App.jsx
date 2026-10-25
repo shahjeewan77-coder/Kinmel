@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -176,6 +176,7 @@ export default function App() {
       }
 
       const finalCategory = `${appMode === 'rental' ? 'Rental: ' : 'Buy/Sell: '}${newCategory}`;
+      const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
       const { error } = await supabase.from('listings').insert([
         {
@@ -186,7 +187,8 @@ export default function App() {
           city: newCity,
           phone: newPhone,
           image_url: imageUrl,
-          user_id: user.id
+          user_id: user.id,
+          is_approved: isPrivileged // Auto-approve if posted by owner/admin, pending otherwise
         }
       ]);
 
@@ -199,10 +201,25 @@ export default function App() {
       setImageFile(null);
       setIsModalOpen(false);
       fetchListings();
+      alert(isPrivileged ? 'Listing published successfully!' : 'Ad submitted successfully! It will appear publicly after admin approval.');
     } catch (err) {
       alert('Error posting listing: ' + err.message);
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleApproveListing = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .update({ is_approved: true })
+        .eq('id', id);
+
+      if (error) throw error;
+      setListings(listings.map(l => l.id === id ? { ...l, is_approved: true } : l));
+    } catch (err) {
+      alert('Error approving listing: ' + err.message);
     }
   };
 
@@ -223,7 +240,13 @@ export default function App() {
     }
   };
 
+  const isPrivileged = userRole === 'owner' || userRole === 'admin';
+
+  // Filter listings based on mode, category, search, and approval status
   const filteredListings = listings.filter((item) => {
+    // Regular users/guests only see approved items. Admins can see all.
+    if (!isPrivileged && !item.is_approved) return false;
+
     const isRentalMode = appMode === 'rental';
     const itemIsRental = item.category?.startsWith('Rental:');
     
@@ -236,7 +259,7 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  const isPrivileged = userRole === 'owner' || userRole === 'admin';
+  const pendingListings = listings.filter(item => !item.is_approved);
 
   // Gateway Screen
   if (!appMode && currentView === 'marketplace') {
@@ -244,7 +267,7 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
         <div className="max-w-4xl w-full text-center">
           <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
-          <p className="text-lg md:text-xl text-orange-100 mb-12">Where do you want to go today? Choose your section below:</p>
+          <p className="text-lg md:text-xl text-orange-100 mb-12">Make deals securely by contacting owners directly. Choose your section below:</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
             {/* Rental Option */}
@@ -284,7 +307,7 @@ export default function App() {
                 onClick={() => setCurrentView('admin-dashboard')}
                 className="bg-black/30 hover:bg-black/50 text-white text-xs font-bold px-6 py-3 rounded-2xl backdrop-blur-md transition"
               >
-                🛡️ Open Admin Control Center
+                🛡️ Open Admin Control Center {pendingListings.length > 0 && `(${pendingListings.length} Pending Approval)`}
               </button>
             </div>
           )}
@@ -341,11 +364,17 @@ export default function App() {
                   setCurrentView(currentView === 'admin-dashboard' ? 'marketplace' : 'admin-dashboard');
                   if (currentView !== 'admin-dashboard') fetchClickLogs();
                 }}
-                className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center transition shadow-2xs ${
+                className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center transition shadow-2xs relative ${
                   currentView === 'admin-dashboard' ? 'bg-gray-900 text-white' : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
                 }`}
               >
-                <ShieldAlert size={16} className="mr-1.5" /> {currentView === 'admin-dashboard' ? 'Marketplace View' : 'Admin Dashboard'}
+                <ShieldAlert size={16} className="mr-1.5" /> 
+                {currentView === 'admin-dashboard' ? 'Marketplace View' : 'Admin Dashboard'}
+                {pendingListings.length > 0 && currentView !== 'admin-dashboard' && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                    {pendingListings.length}
+                  </span>
+                )}
               </button>
             )}
 
@@ -377,7 +406,7 @@ export default function App() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Owner & Admin Control Center</h1>
-              <p className="text-sm text-gray-500">Monitor platform activity, listing engagement, and buyer interest notifications.</p>
+              <p className="text-sm text-gray-500">Approve pending ads, monitor platform engagement, and track viewer clicks.</p>
             </div>
             <button onClick={fetchClickLogs} className="text-xs bg-white border border-gray-300 px-3.5 py-2 rounded-xl font-medium hover:bg-gray-50 flex items-center">
               <RefreshCw size={14} className="mr-1.5 text-gray-500" /> Refresh Data
@@ -387,10 +416,10 @@ export default function App() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Total Live Listings</p>
-                <h3 className="text-3xl font-black text-gray-900">{listings.length}</h3>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Pending Approval Queue</p>
+                <h3 className="text-3xl font-black text-orange-600">{pendingListings.length}</h3>
               </div>
-              <div className="p-3.5 bg-orange-50 text-orange-600 rounded-2xl"><BarChart3 size={24} /></div>
+              <div className="p-3.5 bg-orange-50 text-orange-600 rounded-2xl"><CheckCircle2 size={24} /></div>
             </div>
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
               <div>
@@ -408,6 +437,48 @@ export default function App() {
             </div>
           </div>
 
+          {/* Pending Approval Section */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b bg-orange-50/70 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-base flex items-center">
+                <CheckCircle2 size={18} className="mr-2 text-orange-600" /> Pending Ads Awaiting Approval ({pendingListings.length})
+              </h3>
+            </div>
+            {pendingListings.length === 0 ? (
+              <div className="p-8 text-center text-gray-400 text-sm">No ads currently waiting for approval.</div>
+            ) : (
+              <div className="divide-y">
+                {pendingListings.map(item => (
+                  <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                    <div className="flex items-center space-x-4">
+                      <img src={item.image_url} alt={item.title} className="w-16 h-16 object-cover rounded-xl" />
+                      <div>
+                        <h4 className="font-bold text-gray-900">{item.title}</h4>
+                        <p className="text-xs text-orange-600 font-semibold">Rs. {item.price?.toLocaleString()} · {item.city} · {item.category}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Posted: {new Date(item.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => handleApproveListing(item.id)} 
+                        className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition"
+                      >
+                        ✓ Approve Ad
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteListing(e, item)} 
+                        className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-2 rounded-xl transition"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Click Logs Table */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
             <div className="px-6 py-4 border-b bg-gray-50/70 flex items-center justify-between">
               <h3 className="font-bold text-gray-800 text-base flex items-center">
@@ -498,7 +569,7 @@ export default function App() {
             <div className="lg:col-span-3">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-black text-gray-900">
-                  {selectedCategory === 'All' ? `All ${appMode === 'rental' ? 'Rental' : 'Buy/Sell'} Items` : `${selectedCategory} Listings`}
+                  {selectedCategory === 'All' ? `All Approved ${appMode === 'rental' ? 'Rental' : 'Buy/Sell'} Items` : `${selectedCategory} Listings`}
                 </h2>
                 <span className="text-xs font-semibold bg-gray-200/70 text-gray-700 px-3 py-1 rounded-full">{filteredListings.length} items</span>
               </div>
@@ -507,8 +578,8 @@ export default function App() {
                 <div className="text-center py-24 text-gray-500 font-medium">Loading items...</div>
               ) : filteredListings.length === 0 ? (
                 <div className="text-center py-24 bg-white rounded-2xl border border-gray-200 shadow-xs">
-                  <p className="text-gray-600 font-semibold mb-2">No items found here yet.</p>
-                  <p className="text-xs text-gray-400">Be the first to post an item using the button above!</p>
+                  <p className="text-gray-600 font-semibold mb-2">No approved items found here yet.</p>
+                  <p className="text-xs text-gray-400">Post an ad and our team will approve it shortly!</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -645,8 +716,9 @@ export default function App() {
         </div>
       )}
 
-      <footer className="bg-white border-t mt-12 py-6 text-center text-sm text-gray-500 font-medium">
-        <p>© 2026 [Kinmel Nepal](https://kinmel-delta.vercel.app/#) · Powered by Supabase & Vercel</p>
+      <footer className="bg-white border-t mt-12 py-6 text-center text-sm text-gray-500 font-medium px-4">
+        <p className="mb-1">Make deals by directly contacting the owner. For any assistance, our team is ready for you!</p>
+        <p className="text-xs text-gray-400">© 2026 [Kinmel Nepal](https://kinmel-delta.vercel.app/#) · Powered by Supabase & Vercel</p>
       </footer>
     </div>
   );
