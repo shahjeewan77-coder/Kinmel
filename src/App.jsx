@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2, UserCheck, Tag } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -12,9 +12,8 @@ export default function App() {
 
   const [appMode, setAppMode] = useState(null);
 
-  const [currentView, setCurrentView] = useState('marketplace');
+  const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
-  const [loadingClicks, setLoadingClicks] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -93,7 +92,6 @@ export default function App() {
 
   async function fetchClickLogs() {
     try {
-      setLoadingClicks(true);
       const { data, error } = await supabase
         .from('listing_clicks')
         .select(`
@@ -116,8 +114,6 @@ export default function App() {
       setClickLogs(data || []);
     } catch (err) {
       console.error('Error fetching click logs:', err.message);
-    } finally {
-      setLoadingClicks(false);
     }
   }
 
@@ -188,7 +184,8 @@ export default function App() {
           phone: newPhone,
           image_url: imageUrl,
           user_id: user.id,
-          is_approved: isPrivileged // Auto-approve if posted by owner/admin, pending otherwise
+          is_approved: isPrivileged,
+          status: 'Active'
         }
       ]);
 
@@ -223,6 +220,22 @@ export default function App() {
     }
   };
 
+  // Toggle item status between Active and Sold
+  const handleToggleStatus = async (item) => {
+    const newStatus = item.status === 'Sold' ? 'Active' : 'Sold';
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .update({ status: newStatus })
+        .eq('id', item.id);
+
+      if (error) throw error;
+      setListings(listings.map(l => l.id === item.id ? { ...l, status: newStatus } : l));
+    } catch (err) {
+      alert('Error updating status: ' + err.message);
+    }
+  };
+
   const handleDeleteListing = async (e, item) => {
     e.stopPropagation();
     const canDelete = userRole === 'owner' || userRole === 'admin' || (user && item.user_id === user.id);
@@ -242,9 +255,8 @@ export default function App() {
 
   const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
-  // Filter listings based on mode, category, search, and approval status
+  // Filter listings for marketplace
   const filteredListings = listings.filter((item) => {
-    // Regular users/guests only see approved items. Admins can see all.
     if (!isPrivileged && !item.is_approved) return false;
 
     const isRentalMode = appMode === 'rental';
@@ -260,17 +272,17 @@ export default function App() {
   });
 
   const pendingListings = listings.filter(item => !item.is_approved);
+  const myUserListings = listings.filter(item => user && item.user_id === user.id);
 
   // Gateway Screen
   if (!appMode && currentView === 'marketplace') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
         <div className="max-w-4xl w-full text-center">
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">[Kinmel Nepal](https://kinmel-delta.vercel.app/#)</h1>
           <p className="text-lg md:text-xl text-orange-100 mb-12">Make deals securely by contacting owners directly. Choose your section below:</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-            {/* Rental Option */}
             <div 
               onClick={() => { setAppMode('rental'); setSelectedCategory('All'); }}
               className="bg-white text-gray-900 rounded-3xl p-8 shadow-2xl hover:scale-105 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-amber-400"
@@ -285,7 +297,6 @@ export default function App() {
               </span>
             </div>
 
-            {/* Buy / Sell Option */}
             <div 
               onClick={() => { setAppMode('buysell'); setSelectedCategory('All'); }}
               className="bg-white text-gray-900 rounded-3xl p-8 shadow-2xl hover:scale-105 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-orange-400"
@@ -301,16 +312,24 @@ export default function App() {
             </div>
           </div>
 
-          {isPrivileged && (
-            <div className="mt-10">
+          <div className="mt-10 flex items-center justify-center space-x-4">
+            {user && (
+              <button
+                onClick={() => setCurrentView('my-dashboard')}
+                className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-6 py-3 rounded-2xl backdrop-blur-md transition flex items-center"
+              >
+                <UserCheck size={16} className="mr-2" /> My Dashboard ({myUserListings.length} Ads)
+              </button>
+            )}
+            {isPrivileged && (
               <button
                 onClick={() => setCurrentView('admin-dashboard')}
                 className="bg-black/30 hover:bg-black/50 text-white text-xs font-bold px-6 py-3 rounded-2xl backdrop-blur-md transition"
               >
-                🛡️ Open Admin Control Center {pendingListings.length > 0 && `(${pendingListings.length} Pending Approval)`}
+                🛡️ Admin Control {pendingListings.length > 0 && `(${pendingListings.length})`}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -329,6 +348,7 @@ export default function App() {
                 setAppMode(null);
                 setSearchTerm('');
                 setSelectedCategory('All');
+                setCurrentView('marketplace');
               }}
               className="text-2xl font-black text-orange-600 tracking-tight cursor-pointer"
             >
@@ -336,12 +356,14 @@ export default function App() {
             </a>
             <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-semibold">Nepal</span>
             
-            <button 
-              onClick={() => setAppMode(appMode === 'rental' ? 'buysell' : 'rental')}
-              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-xl font-bold transition flex items-center"
-            >
-              Mode: <span className="text-orange-600 ml-1 uppercase">{appMode === 'rental' ? '🏠 Rental' : '🛒 Buy/Sell'} (Switch)</span>
-            </button>
+            {appMode && (
+              <button 
+                onClick={() => setAppMode(appMode === 'rental' ? 'buysell' : 'rental')}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-xl font-bold transition flex items-center hidden sm:flex"
+              >
+                Mode: <span className="text-orange-600 ml-1 uppercase">{appMode === 'rental' ? '🏠 Rental' : '🛒 Buy/Sell'} (Switch)</span>
+              </button>
+            )}
           </div>
           
           <div className="hidden md:flex flex-1 max-w-md mx-8">
@@ -357,7 +379,18 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {user && (
+              <button
+                onClick={() => setCurrentView(currentView === 'my-dashboard' ? 'marketplace' : 'my-dashboard')}
+                className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center transition shadow-2xs ${
+                  currentView === 'my-dashboard' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <UserCheck size={16} className="mr-1.5" /> <span className="hidden sm:inline">My Dashboard</span>
+              </button>
+            )}
+
             {isPrivileged && (
               <button
                 onClick={() => {
@@ -368,8 +401,7 @@ export default function App() {
                   currentView === 'admin-dashboard' ? 'bg-gray-900 text-white' : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
                 }`}
               >
-                <ShieldAlert size={16} className="mr-1.5" /> 
-                {currentView === 'admin-dashboard' ? 'Marketplace View' : 'Admin Dashboard'}
+                <ShieldAlert size={16} className="mr-1.5" /> <span className="hidden sm:inline">Admin</span>
                 {pendingListings.length > 0 && currentView !== 'admin-dashboard' && (
                   <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
                     {pendingListings.length}
@@ -379,20 +411,19 @@ export default function App() {
             )}
 
             {user ? (
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center shadow-sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center shadow-sm"
                 >
-                  <PlusCircle size={16} className="mr-1.5" /> Post Ad
+                  <PlusCircle size={16} className="mr-1" /> Post
                 </button>
-                <span className="text-sm font-medium text-gray-700 hidden lg:inline">{user.email}</span>
-                <button onClick={handleLogout} className="text-sm border border-gray-300 px-3 py-2 rounded-xl hover:bg-gray-100 font-medium text-gray-700">
+                <button onClick={handleLogout} className="text-xs border border-gray-300 px-3 py-2 rounded-xl hover:bg-gray-100 font-medium text-gray-700 hidden lg:inline">
                   Sign Out
                 </button>
               </div>
             ) : (
-              <button onClick={handleGoogleLogin} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-sm">
+              <button onClick={handleGoogleLogin} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">
                 Sign in
               </button>
             )}
@@ -401,15 +432,80 @@ export default function App() {
       </header>
 
       {/* Main View Router */}
-      {currentView === 'admin-dashboard' && isPrivileged ? (
+      {currentView === 'my-dashboard' && user ? (
+        <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full animate-fadeIn">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">My Posted Ads Dashboard</h1>
+              <p className="text-sm text-gray-500">Manage your active listings, check approval status, and update product status to Sold or Active.</p>
+            </div>
+            <button 
+              onClick={() => setCurrentView('marketplace')} 
+              className="text-xs bg-white border border-gray-300 px-4 py-2 rounded-xl font-medium hover:bg-gray-50"
+            >
+              ← Back to Marketplace
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-base">Your Listings ({myUserListings.length})</h3>
+              <button onClick={() => setIsModalOpen(true)} className="bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                + Post New Ad
+              </button>
+            </div>
+            {myUserListings.length === 0 ? (
+              <div className="p-12 text-center text-gray-400 text-sm">You haven't posted any ads yet. Click "+ Post New Ad" to get started!</div>
+            ) : (
+              <div className="divide-y">
+                {myUserListings.map(item => (
+                  <div key={item.id} className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-gray-50 transition">
+                    <div className="flex items-center space-x-4">
+                      <img src={item.image_url} alt={item.title} className="w-20 h-20 object-cover rounded-xl border" />
+                      <div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h4 className="font-bold text-gray-900 text-base">{item.title}</h4>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {item.status || 'Active'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city} · {item.category}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Approval: {item.is_approved ? <span className="text-green-600 font-semibold">Approved & Live</span> : <span className="text-amber-600 font-semibold">Pending Admin Review</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                      <button 
+                        onClick={() => handleToggleStatus(item)}
+                        className={`text-xs font-bold px-4 py-2 rounded-xl transition ${
+                          item.status === 'Sold' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {item.status === 'Sold' ? 'Mark as Active' : 'Mark as Sold'}
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteListing(e, item)} 
+                        className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-2 rounded-xl transition"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
+      ) : currentView === 'admin-dashboard' && isPrivileged ? (
         <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full animate-fadeIn">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Owner & Admin Control Center</h1>
-              <p className="text-sm text-gray-500">Approve pending ads, monitor platform engagement, and track viewer clicks.</p>
+              <p className="text-sm text-gray-500">Approve pending ads and monitor platform engagement.</p>
             </div>
-            <button onClick={fetchClickLogs} className="text-xs bg-white border border-gray-300 px-3.5 py-2 rounded-xl font-medium hover:bg-gray-50 flex items-center">
-              <RefreshCw size={14} className="mr-1.5 text-gray-500" /> Refresh Data
+            <button onClick={() => setCurrentView('marketplace')} className="text-xs bg-white border border-gray-300 px-4 py-2 rounded-xl font-medium hover:bg-gray-50">
+              ← Back to Marketplace
             </button>
           </div>
 
@@ -455,7 +551,6 @@ export default function App() {
                       <div>
                         <h4 className="font-bold text-gray-900">{item.title}</h4>
                         <p className="text-xs text-orange-600 font-semibold">Rs. {item.price?.toLocaleString()} · {item.city} · {item.category}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Posted: {new Date(item.created_at).toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -476,39 +571,6 @@ export default function App() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Click Logs Table */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b bg-gray-50/70 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 text-base flex items-center">
-                <MousePointerClick size={18} className="mr-2 text-orange-600" /> Buyer Ad Click Notifications
-              </h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b bg-gray-50/50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-6">Clicked Ad Title</th>
-                    <th className="py-3.5 px-6">Category</th>
-                    <th className="py-3.5 px-6">Price</th>
-                    <th className="py-3.5 px-6">Viewer Gmail / User</th>
-                    <th className="py-3.5 px-6">Time Clicked</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y text-sm text-gray-700">
-                  {clickLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50/80 transition">
-                      <td className="py-4 px-6 font-semibold text-gray-900">{log.listings?.title || 'Deleted Listing'}</td>
-                      <td className="py-4 px-6"><span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-medium">{log.listings?.category || 'N/A'}</span></td>
-                      <td className="py-4 px-6 font-bold text-orange-600">{log.listings?.price ? `Rs. ${log.listings.price.toLocaleString()}` : 'N/A'}</td>
-                      <td className="py-4 px-6 font-medium text-gray-900">{log.viewer_email || 'Guest Visitor'}</td>
-                      <td className="py-4 px-6 text-xs text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         </main>
       ) : (
@@ -585,16 +647,22 @@ export default function App() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredListings.map((item) => {
                     const canModify = isPrivileged || (user && item.user_id === user.id);
+                    const isSold = item.status === 'Sold';
                     return (
                       <div 
                         key={item.id} 
                         onClick={() => handleCardClick(item)}
-                        className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+                        className={`bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group ${isSold ? 'opacity-75' : ''}`}
                       >
                         <div>
                           <div className="h-48 bg-gray-100 relative overflow-hidden">
                             <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                             <span className="absolute top-3 left-3 bg-black/75 text-white text-xs px-2.5 py-1 rounded-lg font-medium">{item.category}</span>
+                            {isSold && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <span className="bg-red-600 text-white font-black text-sm px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg">SOLD OUT</span>
+                              </div>
+                            )}
                           </div>
                           <div className="p-4">
                             <div className="text-lg font-black text-gray-900 mb-1">Rs. {item.price?.toLocaleString()}</div>
@@ -628,8 +696,20 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4"><img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" /></div>
-            <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
+            <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
+              <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
+              {selectedItem.status === 'Sold' && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <span className="bg-red-600 text-white font-black text-lg px-6 py-2 rounded-full uppercase tracking-wider">SOLD OUT</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                Status: {selectedItem.status || 'Active'}
+              </span>
+            </div>
             <h2 className="text-2xl font-black text-gray-900 mt-2.5 mb-1">{selectedItem.title}</h2>
             <div className="text-2xl font-black text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
             <div className="flex items-center text-sm text-gray-600 mb-5 flex-wrap gap-y-2 bg-gray-50 p-3.5 rounded-xl border border-gray-200/60">
