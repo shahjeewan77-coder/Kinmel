@@ -1,0 +1,15 @@
+{
+  "short_name": "Kinmel",
+  "name": "Kinmel Nepal",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1523275335684-37898b6baf30",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ea580c",
+  "theme_color": "#ea580c",
+  "display": "standalone"
+}
