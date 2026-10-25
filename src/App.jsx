@@ -236,7 +236,7 @@ export default function App() {
         finalCategory = `${appMode === 'rental' ? 'Rental: ' : 'Buy/Sell: '}${newCategory}`;
       }
 
-      const isAdminOrEditor = userRole === 'admin' || userRole === 'editor';
+      const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin' || userRole === 'editor';
 
       if (editingItem) {
         const updateData = {
@@ -264,14 +264,14 @@ export default function App() {
           negotiable: newNegotiable,
           image_url: imageUrl,
           user_id: user.id,
-          is_approved: isAdminOrEditor,
+          is_approved: isOwnerOrAdmin,
           status: 'Active',
           sold_at: null
         };
 
         const { error } = await supabase.from('listings').insert([insertData]);
         if (error) throw error;
-        alert(isAdminOrEditor ? 'Listing published successfully!' : 'Ad submitted successfully! It will appear publicly after admin approval.');
+        alert(isOwnerOrAdmin ? 'Listing published successfully!' : 'Ad submitted successfully! It will appear publicly after review.');
       }
 
       setIsModalOpen(false);
@@ -320,8 +320,8 @@ export default function App() {
 
   const handleDeleteListing = async (e, item) => {
     e.stopPropagation();
-    const canDelete = userRole === 'admin' || userRole === 'editor' || (user && item.user_id === user.id);
-    if (!canDelete) return alert('You do not have permission to delete this listing.');
+    const canDelete = isOwner || (user && item.user_id === user.id);
+    if (!canDelete) return alert('Only the Owner or the listing author can delete this listing.');
 
     if (!confirm('Are you sure you want to delete this listing?')) return;
 
@@ -335,9 +335,11 @@ export default function App() {
     }
   };
 
-  const isAdmin = userRole === 'admin';
+  // Role Hierarchy Definitions
+  const isOwner = userRole === 'owner';
+  const isAdmin = userRole === 'admin' || isOwner;
   const isEditor = userRole === 'editor' || isAdmin;
-  const isPrivileged = isAdmin || isEditor || userRole === 'responder';
+  const isPrivileged = isOwner || isAdmin || isEditor || userRole === 'responder';
 
   const filteredListings = listings.filter((item) => {
     if (!isPrivileged && !item.is_approved) return false;
@@ -689,7 +691,7 @@ export default function App() {
                       >
                         ✓ Approve
                       </button>
-                      {isAdmin && (
+                      {isOwner && (
                         <button 
                           onClick={(e) => handleDeleteListing(e, item)} 
                           className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-2 rounded-xl transition"
@@ -777,7 +779,8 @@ export default function App() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredListings.map((item) => {
-                    const canModify = isAdmin || isEditor || (user && item.user_id === user.id);
+                    const canModify = isEditor || (user && item.user_id === user.id);
+                    const canDelete = isOwner || (user && item.user_id === user.id);
                     const isSold = item.status === 'Sold';
                     const isNeg = item.negotiable ?? true;
                     return (
@@ -816,9 +819,11 @@ export default function App() {
                                     <Edit3 size={14} />
                                   </button>
                                 )}
-                                <button onClick={(e) => handleDeleteListing(e, item)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Delete post">
-                                  <Trash2 size={14} />
-                                </button>
+                                {canDelete && (
+                                  <button onClick={(e) => handleDeleteListing(e, item)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Delete post">
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
