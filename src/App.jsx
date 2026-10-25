@@ -220,17 +220,21 @@ export default function App() {
     }
   };
 
-  // Toggle item status between Active and Sold
   const handleToggleStatus = async (item) => {
     const newStatus = item.status === 'Sold' ? 'Active' : 'Sold';
+    const updatePayload = { status: newStatus };
+    if (newStatus === 'Sold') {
+      updatePayload.sold_at = new Date().toISOString(); // track when it was sold
+    }
+
     try {
       const { error } = await supabase
         .from('listings')
-        .update({ status: newStatus })
+        .update(updatePayload)
         .eq('id', item.id);
 
       if (error) throw error;
-      setListings(listings.map(l => l.id === item.id ? { ...l, status: newStatus } : l));
+      setListings(listings.map(l => l.id === item.id ? { ...l, ...updatePayload } : l));
     } catch (err) {
       alert('Error updating status: ' + err.message);
     }
@@ -255,9 +259,16 @@ export default function App() {
 
   const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
-  // Filter listings for marketplace
+  // FIX: Show sold items for 24 hours, then hide them automatically
   const filteredListings = listings.filter((item) => {
     if (!isPrivileged && !item.is_approved) return false;
+
+    if (item.status === 'Sold' && item.sold_at) {
+      const soldTime = new Date(item.sold_at).getTime();
+      const now = new Date().getTime();
+      const hoursPassed = (now - soldTime) / (1000 * 60 * 60);
+      if (hoursPassed > 24) return false; // Hide after 24 hours
+    }
 
     const isRentalMode = appMode === 'rental';
     const itemIsRental = item.category?.startsWith('Rental:');
@@ -279,7 +290,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
         <div className="max-w-4xl w-full text-center">
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">[Kinmel Nepal](https://kinmel-delta.vercel.app/#)</h1>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
           <p className="text-lg md:text-xl text-orange-100 mb-12">Make deals securely by contacting owners directly. Choose your section below:</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
@@ -533,7 +544,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Pending Approval Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
             <div className="px-6 py-4 border-b bg-orange-50/70 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-base flex items-center">
@@ -631,7 +641,7 @@ export default function App() {
             <div className="lg:col-span-3">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-black text-gray-900">
-                  {selectedCategory === 'All' ? `All Approved ${appMode === 'rental' ? 'Rental' : 'Buy/Sell'} Items` : `${selectedCategory} Listings`}
+                  {selectedCategory === 'All' ? `All ${appMode === 'rental' ? 'Rental' : 'Buy/Sell'} Items` : `${selectedCategory} Listings`}
                 </h2>
                 <span className="text-xs font-semibold bg-gray-200/70 text-gray-700 px-3 py-1 rounded-full">{filteredListings.length} items</span>
               </div>
@@ -640,8 +650,8 @@ export default function App() {
                 <div className="text-center py-24 text-gray-500 font-medium">Loading items...</div>
               ) : filteredListings.length === 0 ? (
                 <div className="text-center py-24 bg-white rounded-2xl border border-gray-200 shadow-xs">
-                  <p className="text-gray-600 font-semibold mb-2">No approved items found here yet.</p>
-                  <p className="text-xs text-gray-400">Post an ad and our team will approve it shortly!</p>
+                  <p className="text-gray-600 font-semibold mb-2">No items found here right now.</p>
+                  <p className="text-xs text-gray-400">Post an ad or check back soon!</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -652,15 +662,15 @@ export default function App() {
                       <div 
                         key={item.id} 
                         onClick={() => handleCardClick(item)}
-                        className={`bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group ${isSold ? 'opacity-75' : ''}`}
+                        className={`bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group ${isSold ? 'opacity-80' : ''}`}
                       >
                         <div>
                           <div className="h-48 bg-gray-100 relative overflow-hidden">
                             <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                             <span className="absolute top-3 left-3 bg-black/75 text-white text-xs px-2.5 py-1 rounded-lg font-medium">{item.category}</span>
                             {isSold && (
-                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <span className="bg-red-600 text-white font-black text-sm px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg">SOLD OUT</span>
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <span className="bg-red-600 text-white font-black text-sm px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg">SOLD</span>
                               </div>
                             )}
                           </div>
@@ -699,8 +709,8 @@ export default function App() {
             <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
               <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
               {selectedItem.status === 'Sold' && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                  <span className="bg-red-600 text-white font-black text-lg px-6 py-2 rounded-full uppercase tracking-wider">SOLD OUT</span>
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <span className="bg-red-600 text-white font-black text-lg px-6 py-2 rounded-full uppercase tracking-wider">SOLD</span>
                 </div>
               )}
             </div>
