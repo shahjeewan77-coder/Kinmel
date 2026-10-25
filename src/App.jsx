@@ -32,6 +32,11 @@ export default function App() {
   const [imageFile, setImageFile] = useState(null);
   const [posting, setPosting] = useState(false);
 
+  // Role Assignment State inside Control Center
+  const [targetEmail, setTargetEmail] = useState('');
+  const [assignedRoleSelect, setAssignedRoleSelect] = useState('admin');
+  const [updatingRole, setUpdatingRole] = useState(false);
+
   const categories = ['Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
 
   useEffect(() => {
@@ -332,6 +337,48 @@ export default function App() {
       if (selectedItem?.id === item.id) setSelectedItem(null);
     } catch (err) {
       alert('Error deleting listing: ' + err.message);
+    }
+  };
+
+  // In-app Role Assignment Function for Owner
+  const handleAssignRoleFromApp = async (e) => {
+    e.preventDefault();
+    if (!isOwner) return alert('Only the Owner can assign roles.');
+    if (!targetEmail) return alert('Please enter an email address.');
+
+    try {
+      setUpdatingRole(true);
+      
+      // 1. Fetch user ID from auth.users (requires admin query or matching user record)
+      // Alternatively, upsert directly using email if table allows or lookup user profile
+      const { data: userData, error: userError } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('email', targetEmail.trim().toLowerCase())
+        .maybeSingle();
+
+      let targetUserId = userData?.id;
+
+      if (!targetUserId) {
+        // Try fetching from auth users table via an RPC or query if permitted, 
+        // or notify to have the user sign in first.
+        return alert('User must sign into Kinmel Nepal with this email at least once before assigning a role!');
+      }
+
+      const { error: upsertError } = await supabase
+        .from('user_roles')
+        .upsert([
+          { id: targetUserId, email: targetEmail.trim().toLowerCase(), role: assignedRoleSelect }
+        ], { onConflict: ['id'] });
+
+      if (upsertError) throw upsertError;
+
+      alert(`Successfully assigned role '${assignedRoleSelect}' to ${targetEmail}!`);
+      setTargetEmail('');
+    } catch (err) {
+      alert('Error updating role: ' + err.message);
+    } finally {
+      setUpdatingRole(false);
     }
   };
 
@@ -655,6 +702,42 @@ export default function App() {
               <div className="p-3.5 bg-red-50 text-red-600 rounded-2xl"><Users size={24} /></div>
             </div>
           </div>
+
+          {/* Owner Role Management Box */}
+          {isOwner && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8 p-6">
+              <h3 className="font-bold text-gray-900 text-base mb-1 flex items-center">
+                <Users size={18} className="mr-2 text-orange-600" /> Quick Team Role Manager
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">Assign team roles directly from here after the member signs in once.</p>
+              <form onSubmit={handleAssignRoleFromApp} className="flex flex-col sm:flex-row gap-3">
+                <input 
+                  type="email" 
+                  required 
+                  placeholder="team-member@gmail.com" 
+                  value={targetEmail}
+                  onChange={(e) => setTargetEmail(e.target.value)}
+                  className="flex-1 border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" 
+                />
+                <select 
+                  value={assignedRoleSelect}
+                  onChange={(e) => setAssignedRoleSelect(e.target.value)}
+                  className="border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="editor">Editor</option>
+                  <option value="responder">Responder</option>
+                </select>
+                <button 
+                  type="submit" 
+                  disabled={updatingRole}
+                  className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition whitespace-nowrap"
+                >
+                  {updatingRole ? 'Updating...' : 'Assign Role'}
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* Pending Approval Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
