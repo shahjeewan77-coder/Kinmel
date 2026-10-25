@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2, UserCheck, Tag, Edit3, Download } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -11,6 +11,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   const [appMode, setAppMode] = useState(null);
+
   const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -52,7 +53,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) fetchUserRole(currentUser.id, currentUser.email);
+      if (currentUser) fetchUserRole(currentUser.id);
       
       if (session && window.location.hash) {
         window.history.replaceState(null, '', window.location.pathname);
@@ -63,7 +64,7 @@ export default function App() {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        fetchUserRole(currentUser.id, currentUser.email);
+        fetchUserRole(currentUser.id);
       } else {
         setUserRole('user');
         setCurrentView('marketplace');
@@ -94,19 +95,15 @@ export default function App() {
     }
   };
 
-  async function fetchUserRole(userId, email) {
+  async function fetchUserRole(userId) {
     try {
-      let { data, error } = await supabase
-        .from('profiles')
+      const { data } = await supabase
+        .from('user_roles')
         .select('role')
         .eq('id', userId)
         .single();
 
-      if (error || !data) {
-        // Fallback insert profile if missing
-        await supabase.from('profiles').upsert([{ id: userId, email: email, role: 'user' }]);
-        setUserRole('user');
-      } else {
+      if (data) {
         setUserRole(data.role.toLowerCase());
       }
     } catch (err) {
@@ -161,7 +158,7 @@ export default function App() {
   async function fetchTeamMembers() {
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('user_roles')
         .select('*')
         .order('role', { ascending: true });
 
@@ -360,7 +357,7 @@ export default function App() {
     }
   };
 
-  // Role Assignment Function checking Profiles table by Email
+  // In-app Role Assignment Function for Owner
   const handleAssignRoleFromApp = async (e) => {
     e.preventDefault();
     if (!isOwner) return alert('Only the Owner can assign roles.');
@@ -368,27 +365,28 @@ export default function App() {
 
     try {
       setUpdatingRole(true);
-      const emailToAssign = targetEmail.trim().toLowerCase();
-
-      // Find user profile by email
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+      
+      const { data: userData, error: userError } = await supabase
+        .from('user_roles')
         .select('id')
-        .eq('email', emailToAssign)
+        .eq('email', targetEmail.trim().toLowerCase())
         .maybeSingle();
 
-      if (profileError || !profileData) {
-        return alert(`User with email "${emailToAssign}" has not signed into Kinmel Nepal yet! They must sign in with Google at least once.`);
+      let targetUserId = userData?.id;
+
+      if (!targetUserId) {
+        return alert('User must sign into Kinmel Nepal with this email at least once before assigning a role!');
       }
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ role: assignedRoleSelect })
-        .eq('id', profileData.id);
+      const { error: upsertError } = await supabase
+        .from('user_roles')
+        .upsert([
+          { id: targetUserId, email: targetEmail.trim().toLowerCase(), role: assignedRoleSelect }
+        ], { onConflict: ['id'] });
 
-      if (updateError) throw updateError;
+      if (upsertError) throw upsertError;
 
-      alert(`Successfully assigned role '${assignedRoleSelect}' to ${emailToAssign}!`);
+      alert(`Successfully assigned role '${assignedRoleSelect}' to ${targetEmail}!`);
       setTargetEmail('');
       fetchTeamMembers();
     } catch (err) {
@@ -402,7 +400,7 @@ export default function App() {
     if (!isOwner) return alert('Only the Owner can modify roles.');
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('user_roles')
         .update({ role: newRole })
         .eq('id', memberId);
 
@@ -416,19 +414,19 @@ export default function App() {
 
   const handleDeleteTeamMember = async (memberId, memberEmail) => {
     if (!isOwner) return alert('Only the Owner can remove team members.');
-    if (!confirm(`Are you sure you want to reset permissions for ${memberEmail}?`)) return;
+    if (!confirm(`Are you sure you want to remove role permissions for ${memberEmail}?`)) return;
 
     try {
       const { error } = await supabase
-        .from('profiles')
-        .update({ role: 'user' })
+        .from('user_roles')
+        .delete()
         .eq('id', memberId);
 
       if (error) throw error;
-      alert('Team member role reset to regular user!');
+      alert('Team member role removed successfully!');
       fetchTeamMembers();
     } catch (err) {
-      alert('Error resetting member role: ' + err.message);
+      alert('Error removing member: ' + err.message);
     }
   };
 
@@ -762,7 +760,7 @@ export default function App() {
               <h3 className="font-bold text-gray-900 text-base mb-1 flex items-center">
                 <Users size={18} className="mr-2 text-orange-600" /> Quick Team Role Manager
               </h3>
-              <p className="text-xs text-gray-500 mb-4">Assign roles by typing the team member's exact login email below.</p>
+              <p className="text-xs text-gray-500 mb-4">Assign team roles directly from here after the member signs in once.</p>
               
               <form onSubmit={handleAssignRoleFromApp} className="flex flex-col sm:flex-row gap-3 mb-6">
                 <input 
@@ -816,12 +814,11 @@ export default function App() {
                             <option value="admin">Admin</option>
                             <option value="editor">Editor</option>
                             <option value="responder">Responder</option>
-                            <option value="user">User</option>
                           </select>
                           <button 
                             onClick={() => handleDeleteTeamMember(member.id, member.email)}
                             className="text-red-500 hover:text-red-700 p-1.5 rounded-lg bg-red-50 transition"
-                            title="Reset role to user"
+                            title="Remove role"
                           >
                             <Trash2 size={14} />
                           </button>
