@@ -25,6 +25,7 @@ export default function App() {
   const [newCategory, setNewCategory] = useState('Vehicles');
   const [newCity, setNewCity] = useState('Dhangadhi');
   const [newPhone, setNewPhone] = useState('');
+  const [newNegotiable, setNewNegotiable] = useState(true);
   const [imageFile, setImageFile] = useState(null);
   const [posting, setPosting] = useState(false);
 
@@ -156,7 +157,7 @@ export default function App() {
     setNewPrice(item.price || '');
     setNewCity(item.city || 'Dhangadhi');
     setNewPhone(item.phone || '');
-    // Clean up category prefix if present
+    setNewNegotiable(item.negotiable ?? true);
     const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Vehicles';
     setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Vehicles');
     setImageFile(null);
@@ -170,6 +171,7 @@ export default function App() {
     setNewPrice('');
     setNewCity('Dhangadhi');
     setNewPhone('');
+    setNewNegotiable(true);
     setNewCategory('Vehicles');
     setImageFile(null);
     setIsModalOpen(true);
@@ -199,7 +201,6 @@ export default function App() {
         imageUrl = publicURLData.publicUrl;
       }
 
-      // Check current mode if creating, or keep original category prefix format if editing
       let finalCategory = newCategory;
       if (editingItem) {
         const prefix = editingItem.category?.startsWith('Rental:') ? 'Rental: ' : 'Buy/Sell: ';
@@ -211,7 +212,6 @@ export default function App() {
       const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
       if (editingItem) {
-        // UPDATE EXISTING POST (Admin Edit)
         const updateData = {
           title: newTitle,
           description: newDescription,
@@ -219,6 +219,7 @@ export default function App() {
           category: finalCategory,
           city: newCity,
           phone: newPhone,
+          negotiable: newNegotiable,
           image_url: imageUrl
         };
 
@@ -226,7 +227,6 @@ export default function App() {
         if (error) throw error;
         alert('Listing updated successfully!');
       } else {
-        // CREATE NEW POST
         const insertData = {
           title: newTitle,
           description: newDescription,
@@ -234,6 +234,7 @@ export default function App() {
           category: finalCategory,
           city: newCity,
           phone: newPhone,
+          negotiable: newNegotiable,
           image_url: imageUrl,
           user_id: user.id,
           is_approved: isPrivileged,
@@ -338,7 +339,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
         <div className="max-w-4xl w-full text-center">
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">[Kinmel Nepal](https://kinmel-delta.vercel.app/#)</h1>
           <p className="text-lg md:text-xl text-orange-100 mb-12">Make deals securely by contacting owners directly. Choose your section below:</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
@@ -527,6 +528,9 @@ export default function App() {
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
                             {item.status || 'Active'}
                           </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.negotiable ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {item.negotiable ? 'Negotiable' : 'Fixed Price'}
+                          </span>
                         </div>
                         <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city} · {item.category}</p>
                         <p className="text-xs text-gray-400 mt-1">
@@ -643,40 +647,6 @@ export default function App() {
               </div>
             )}
           </div>
-
-          {/* All Listings Management Section for Admin */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 text-base">All Platform Listings ({listings.length})</h3>
-            </div>
-            <div className="divide-y max-h-96 overflow-y-auto">
-              {listings.map(item => (
-                <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                  <div className="flex items-center space-x-4">
-                    <img src={item.image_url} alt={item.title} className="w-14 h-14 object-cover rounded-xl border" />
-                    <div>
-                      <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
-                      <p className="text-xs font-semibold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city} · {item.category}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => openEditModal(item)} 
-                      className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center"
-                    >
-                      <Edit3 size={13} className="mr-1" /> Edit
-                    </button>
-                    <button 
-                      onClick={(e) => handleDeleteListing(e, item)} 
-                      className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </main>
       ) : (
         <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
@@ -753,6 +723,7 @@ export default function App() {
                   {filteredListings.map((item) => {
                     const canModify = isPrivileged || (user && item.user_id === user.id);
                     const isSold = item.status === 'Sold';
+                    const isNeg = item.negotiable ?? true;
                     return (
                       <div 
                         key={item.id} 
@@ -763,6 +734,9 @@ export default function App() {
                           <div className="h-48 bg-gray-100 relative overflow-hidden">
                             <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                             <span className="absolute top-3 left-3 bg-black/75 text-white text-xs px-2.5 py-1 rounded-lg font-medium">{item.category}</span>
+                            <span className={`absolute top-3 right-3 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-sm ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
+                              {isNeg ? 'Negotiable' : 'Fixed Price'}
+                            </span>
                             {isSold && (
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                 <span className="bg-red-600 text-white font-black text-sm px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg">SOLD</span>
@@ -830,9 +804,14 @@ export default function App() {
             </div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-lg font-bold">{selectedItem.category}</span>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                Status: {selectedItem.status || 'Active'}
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.negotiable ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                  {selectedItem.negotiable ? 'Negotiable' : 'Fixed Price'}
+                </span>
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${selectedItem.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  Status: {selectedItem.status || 'Active'}
+                </span>
+              </div>
             </div>
             <h2 className="text-2xl font-black text-gray-900 mt-2.5 mb-1">{selectedItem.title}</h2>
             <div className="text-2xl font-black text-orange-600 mb-4">Rs. {selectedItem.price?.toLocaleString()}</div>
@@ -872,7 +851,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <h2 className="text-xl font-black text-gray-900 mb-4">{editingItem ? 'Edit Listing (Admin)' : 'Post a New Ad'}</h2>
+            <h2 className="text-xl font-black text-gray-900 mb-4">{editingItem ? 'Edit Listing' : 'Post a New Ad'}</h2>
             <form onSubmit={handleSaveListing} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1">Item Title *</label>
@@ -898,6 +877,31 @@ export default function App() {
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">Contact Phone Number</label>
                   <input type="text" placeholder="e.g. 9812345678" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Price Type</label>
+                <div className="flex items-center space-x-4 pt-1">
+                  <label className="flex items-center cursor-pointer text-sm font-semibold text-gray-700">
+                    <input 
+                      type="radio" 
+                      name="negotiable" 
+                      checked={newNegotiable === true} 
+                      onChange={() => setNewNegotiable(true)} 
+                      className="mr-2 text-orange-600 focus:ring-orange-500" 
+                    />
+                    Negotiable
+                  </label>
+                  <label className="flex items-center cursor-pointer text-sm font-semibold text-gray-700">
+                    <input 
+                      type="radio" 
+                      name="negotiable" 
+                      checked={newNegotiable === false} 
+                      onChange={() => setNewNegotiable(false)} 
+                      className="mr-2 text-orange-600 focus:ring-orange-500" 
+                    />
+                    Not Negotiable (Fixed)
+                  </label>
                 </div>
               </div>
               <div>
