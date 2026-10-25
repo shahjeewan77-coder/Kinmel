@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -9,6 +9,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+
+  // App Mode: null means selection screen, 'rental' or 'buysell' means inside that room
+  const [appMode, setAppMode] = useState(null);
 
   const [currentView, setCurrentView] = useState('marketplace');
   const [clickLogs, setClickLogs] = useState([]);
@@ -130,6 +133,7 @@ export default function App() {
     await supabase.auth.signOut();
     setUserRole('user');
     setCurrentView('marketplace');
+    setAppMode(null);
   };
 
   const handleCardClick = async (item) => {
@@ -172,12 +176,15 @@ export default function App() {
         imageUrl = publicURLData.publicUrl;
       }
 
+      // We prefix or tag the category/title with the active mode (Rental vs Buy/Sell)
+      const finalCategory = `${appMode === 'rental' ? 'Rental: ' : 'Buy/Sell: '}${newCategory}`;
+
       const { error } = await supabase.from('listings').insert([
         {
           title: newTitle,
           description: newDescription,
           price: parseFloat(newPrice),
-          category: newCategory,
+          category: finalCategory,
           city: newCity,
           phone: newPhone,
           image_url: imageUrl,
@@ -218,8 +225,16 @@ export default function App() {
     }
   };
 
+  // Filter listings based on whether we are in Rental room or Buy/Sell room
   const filteredListings = listings.filter((item) => {
-    const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
+    const isRentalMode = appMode === 'rental';
+    const itemIsRental = item.category?.startsWith('Rental:');
+    
+    // Check mode match
+    if (isRentalMode && !itemIsRental && item.category !== 'All') return false;
+    if (!isRentalMode && itemIsRental) return false;
+
+    const matchesCategory = selectedCategory === 'All' || item.category?.includes(selectedCategory);
     const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           item.city?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
@@ -227,28 +242,88 @@ export default function App() {
 
   const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
+  // If user hasn't selected Rental or Buy/Sell yet, show the two-room welcome gateway
+  if (!appMode && currentView === 'marketplace') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
+        <div className="max-w-4xl w-full text-center">
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
+          <p className="text-lg md:text-xl text-orange-100 mb-12">Where do you want to go today? Choose your section below:</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            {/* Room 1: Rental */}
+            <div 
+              onClick={() => { setAppMode('rental'); setSelectedCategory('All'); }}
+              className="bg-white text-gray-900 rounded-3xl p-8 shadow-2xl hover:scale-105 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-amber-400"
+            >
+              <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center text-2xl font-black mb-4 group-hover:bg-orange-600 group-hover:text-white transition">
+                🏠
+              </div>
+              <h2 className="text-2xl font-black mb-2">Rental Room</h2>
+              <p className="text-sm text-gray-500 mb-6">Find equipment, shuttering tools, rooms, vehicles, or items available for rent.</p>
+              <span className="inline-flex items-center text-sm font-bold text-orange-600 group-hover:translate-x-1 transition">
+                Enter Rental <ArrowRight size={16} className="ml-1.5" />
+              </span>
+            </div>
+
+            {/* Room 2: Buy / Sell */}
+            <div 
+              onClick={() => { setAppMode('buysell'); setSelectedCategory('All'); }}
+              className="bg-white text-gray-900 rounded-3xl p-8 shadow-2xl hover:scale-105 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-orange-400"
+            >
+              <div className="w-16 h-16 bg-orange-100 text-orange-700 rounded-2xl flex items-center justify-center text-2xl font-black mb-4 group-hover:bg-orange-600 group-hover:text-white transition">
+                🛒
+              </div>
+              <h2 className="text-2xl font-black mb-2">Buy / Sell Room</h2>
+              <p className="text-sm text-gray-500 mb-6">Buy pre-owned goods, smartphones, electronics, or sell your items for cash.</p>
+              <span className="inline-flex items-center text-sm font-bold text-orange-600 group-hover:translate-x-1 transition">
+                Enter Buy / Sell <ArrowRight size={16} className="ml-1.5" />
+              </span>
+            </div>
+          </div>
+
+          {isPrivileged && (
+            <div className="mt-10">
+              <button
+                onClick={() => setCurrentView('admin-dashboard')}
+                className="bg-black/30 hover:bg-black/50 text-white text-xs font-bold px-6 py-3 rounded-2xl backdrop-blur-md transition"
+              >
+                🛡️ Open Admin Control Center
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <a 
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                setCurrentView('marketplace');
+                setAppMode(null);
                 setSearchTerm('');
                 setSelectedCategory('All');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className="text-2xl font-black text-orange-600 tracking-tight cursor-pointer"
             >
               Kinmel
             </a>
             <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-semibold">Nepal</span>
-            {userRole === 'owner' && <span className="text-xs bg-rose-100 text-rose-700 px-2.5 py-1 rounded-full font-bold ml-2 shadow-2xs">Owner Admin</span>}
-            {userRole === 'admin' && <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-bold ml-2 shadow-2xs">Admin</span>}
+            
+            {/* Room Switcher Badge */}
+            <button 
+              onClick={() => setAppMode(appMode === 'rental' ? 'buysell' : 'rental')}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-xl font-bold transition flex items-center"
+            >
+              Mode: <span className="text-orange-600 ml-1 uppercase">{appMode === 'rental' ? '🏠 Rental' : '🛒 Buy/Sell'} (Switch)</span>
+            </button>
           </div>
           
           <div className="hidden md:flex flex-1 max-w-md mx-8">
@@ -256,7 +331,7 @@ export default function App() {
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Search size={18} /></span>
               <input
                 type="text"
-                placeholder="Search phones, cars, rooms, jobs..."
+                placeholder="Search items in this room..."
                 className="w-full pl-10 pr-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-50/50"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -372,22 +447,29 @@ export default function App() {
         </main>
       ) : (
         <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
-          {/* Slim Orange Banner with "buy sell and rent anything" in the middle */}
+          {/* Slim Banner with Mode Title */}
           <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-6 py-5 mb-8 text-white shadow-md flex items-center justify-between">
-            <div></div>
-            <h1 className="text-xl md:text-2xl font-black tracking-tight uppercase text-center">buy sell and rent anything</h1>
+            <button 
+              onClick={() => setAppMode(null)}
+              className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-1.5 rounded-xl transition"
+            >
+              ← Back to Rooms
+            </button>
+            <h1 className="text-xl md:text-2xl font-black tracking-tight uppercase text-center">
+              {appMode === 'rental' ? '🏠 Rental Room' : '🛒 Buy & Sell Room'}
+            </h1>
             {user ? (
               <button 
                 onClick={() => setIsModalOpen(true)}
                 className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition whitespace-nowrap"
               >
-                + Post Free Ad
+                + Post {appMode === 'rental' ? 'Rental' : 'Ad'}
               </button>
             ) : <div></div>}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Left Sidebar Categories starting right below Kinmel */}
+            {/* Left Sidebar Categories */}
             <aside className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs sticky top-20">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center">
@@ -421,16 +503,17 @@ export default function App() {
             <div className="lg:col-span-3">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-black text-gray-900">
-                  {selectedCategory === 'All' ? 'Freshly Posted Ads' : `${selectedCategory} Listings`}
+                  {selectedCategory === 'All' ? `All ${appMode === 'rental' ? 'Rental' : 'Buy/Sell'} Items` : `${selectedCategory} Listings`}
                 </h2>
                 <span className="text-xs font-semibold bg-gray-200/70 text-gray-700 px-3 py-1 rounded-full">{filteredListings.length} items</span>
               </div>
 
               {loading ? (
-                <div className="text-center py-24 text-gray-500 font-medium">Loading marketplace...</div>
+                <div className="text-center py-24 text-gray-500 font-medium">Loading room items...</div>
               ) : filteredListings.length === 0 ? (
                 <div className="text-center py-24 bg-white rounded-2xl border border-gray-200 shadow-xs">
-                  <p className="text-gray-600 font-semibold mb-2">No live listings found matching your criteria.</p>
+                  <p className="text-gray-600 font-semibold mb-2">No items found in this room yet.</p>
+                  <p className="text-xs text-gray-400">Be the first to post an item using the button above!</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -514,16 +597,16 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <h2 className="text-xl font-black text-gray-900 mb-4">Post a New Ad</h2>
+            <h2 className="text-xl font-black text-gray-900 mb-4">Post in {appMode === 'rental' ? 'Rental Room' : 'Buy/Sell Room'}</h2>
             <form onSubmit={handleCreateListing} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Ad Title *</label>
-                <input type="text" required placeholder="e.g. Honda Dio Scooter 2022" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+                <label className="block text-xs font-bold text-gray-600 mb-1">Item Title *</label>
+                <input type="text" required placeholder="e.g. Concrete Mixer / Honda Dio" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Price (NPR) *</label>
-                  <input type="number" required placeholder="e.g. 150000" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Price / Rent Rate (NPR) *</label>
+                  <input type="number" required placeholder="e.g. 5000" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">Category</label>
@@ -552,7 +635,7 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1">Description</label>
-                <textarea rows="3" placeholder="Mention condition, features..." className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
+                <textarea rows="3" placeholder="Mention condition, rental duration terms, features..." className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
               </div>
               <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm transition">
                 {posting ? 'Publishing...' : 'Publish Listing'}
