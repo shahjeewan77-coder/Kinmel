@@ -224,7 +224,7 @@ export default function App() {
     const newStatus = item.status === 'Sold' ? 'Active' : 'Sold';
     const updatePayload = { status: newStatus };
     if (newStatus === 'Sold') {
-      updatePayload.sold_at = new Date().toISOString(); // track when it was sold
+      updatePayload.sold_at = new Date().toISOString();
     }
 
     try {
@@ -259,7 +259,6 @@ export default function App() {
 
   const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
-  // FIX: Show sold items for 24 hours, then hide them automatically
   const filteredListings = listings.filter((item) => {
     if (!isPrivileged && !item.is_approved) return false;
 
@@ -267,7 +266,7 @@ export default function App() {
       const soldTime = new Date(item.sold_at).getTime();
       const now = new Date().getTime();
       const hoursPassed = (now - soldTime) / (1000 * 60 * 60);
-      if (hoursPassed > 24) return false; // Hide after 24 hours
+      if (hoursPassed > 24) return false;
     }
 
     const isRentalMode = appMode === 'rental';
@@ -285,7 +284,6 @@ export default function App() {
   const pendingListings = listings.filter(item => !item.is_approved);
   const myUserListings = listings.filter(item => user && item.user_id === user.id);
 
-  // Gateway Screen
   if (!appMode && currentView === 'marketplace') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white">
@@ -701,11 +699,23 @@ export default function App() {
         </main>
       )}
 
-      {/* Item Detail Modal */}
+      {/* Item Detail Modal with Fixed Close Handler */}
       {selectedItem && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+        <div 
+          onClick={() => setSelectedItem(null)} 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="bg-white rounded-3xl max-w-xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto cursor-default"
+          >
+            <button 
+              onClick={() => setSelectedItem(null)} 
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 p-2.5 rounded-full transition z-10"
+              title="Close"
+            >
+              <X size={20} />
+            </button>
             <div className="h-64 bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
               <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
               {selectedItem.status === 'Sold' && (
