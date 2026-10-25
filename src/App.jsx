@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2, UserCheck, Tag } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, BarChart3, Users, MousePointerClick, LayoutGrid, Layers, RefreshCw, ArrowRight, CheckCircle2, UserCheck, Tag, Edit3 } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -12,11 +12,13 @@ export default function App() {
 
   const [appMode, setAppMode] = useState(null);
 
-  const [currentView, setCurrentView] = useState('marketplace');
+  const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
+  // Post / Edit Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newPrice, setNewPrice] = useState('');
@@ -147,13 +149,39 @@ export default function App() {
     }
   };
 
-  const handleCreateListing = async (e) => {
+  const openEditModal = (item) => {
+    setEditingItem(item);
+    setNewTitle(item.title || '');
+    setNewDescription(item.description || '');
+    setNewPrice(item.price || '');
+    setNewCity(item.city || 'Dhangadhi');
+    setNewPhone(item.phone || '');
+    // Clean up category prefix if present
+    const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Vehicles';
+    setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Vehicles');
+    setImageFile(null);
+    setIsModalOpen(true);
+  };
+
+  const openCreateModal = () => {
+    setEditingItem(null);
+    setNewTitle('');
+    setNewDescription('');
+    setNewPrice('');
+    setNewCity('Dhangadhi');
+    setNewPhone('');
+    setNewCategory('Vehicles');
+    setImageFile(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveListing = async (e) => {
     e.preventDefault();
     if (!newTitle || !newPrice) return alert('Please fill in title and price!');
 
     try {
       setPosting(true);
-      let imageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
+      let imageUrl = editingItem ? editingItem.image_url : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
 
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
@@ -171,11 +199,35 @@ export default function App() {
         imageUrl = publicURLData.publicUrl;
       }
 
-      const finalCategory = `${appMode === 'rental' ? 'Rental: ' : 'Buy/Sell: '}${newCategory}`;
+      // Check current mode if creating, or keep original category prefix format if editing
+      let finalCategory = newCategory;
+      if (editingItem) {
+        const prefix = editingItem.category?.startsWith('Rental:') ? 'Rental: ' : 'Buy/Sell: ';
+        finalCategory = `${prefix}${newCategory}`;
+      } else {
+        finalCategory = `${appMode === 'rental' ? 'Rental: ' : 'Buy/Sell: '}${newCategory}`;
+      }
+
       const isPrivileged = userRole === 'owner' || userRole === 'admin';
 
-      const { error } = await supabase.from('listings').insert([
-        {
+      if (editingItem) {
+        // UPDATE EXISTING POST (Admin Edit)
+        const updateData = {
+          title: newTitle,
+          description: newDescription,
+          price: parseFloat(newPrice),
+          category: finalCategory,
+          city: newCity,
+          phone: newPhone,
+          image_url: imageUrl
+        };
+
+        const { error } = await supabase.from('listings').update(updateData).eq('id', editingItem.id);
+        if (error) throw error;
+        alert('Listing updated successfully!');
+      } else {
+        // CREATE NEW POST
+        const insertData = {
           title: newTitle,
           description: newDescription,
           price: parseFloat(newPrice),
@@ -187,21 +239,18 @@ export default function App() {
           is_approved: isPrivileged,
           status: 'Active',
           sold_at: null
-        }
-      ]);
+        };
 
-      if (error) throw error;
+        const { error } = await supabase.from('listings').insert([insertData]);
+        if (error) throw error;
+        alert(isPrivileged ? 'Listing published successfully!' : 'Ad submitted successfully! It will appear publicly after admin approval.');
+      }
 
-      setNewTitle('');
-      setNewDescription('');
-      setNewPrice('');
-      setNewPhone('');
-      setImageFile(null);
       setIsModalOpen(false);
+      setEditingItem(null);
       fetchListings();
-      alert(isPrivileged ? 'Listing published successfully!' : 'Ad submitted successfully! It will appear publicly after admin approval.');
     } catch (err) {
-      alert('Error posting listing: ' + err.message);
+      alert('Error saving listing: ' + err.message);
     } finally {
       setPosting(false);
     }
@@ -263,7 +312,6 @@ export default function App() {
   const filteredListings = listings.filter((item) => {
     if (!isPrivileged && !item.is_approved) return false;
 
-    // Keep sold items visible for 24 hours, then hide
     if (item.status === 'Sold' && item.sold_at) {
       const soldTime = new Date(item.sold_at).getTime();
       const now = new Date().getTime();
@@ -424,7 +472,7 @@ export default function App() {
             {user ? (
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={openCreateModal}
                   className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center shadow-sm"
                 >
                   <PlusCircle size={16} className="mr-1" /> Post
@@ -448,7 +496,7 @@ export default function App() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">My Posted Ads Dashboard</h1>
-              <p className="text-sm text-gray-500">Manage your active listings, check approval status, and update product status to Sold or Active.</p>
+              <p className="text-sm text-gray-500">Manage your active listings, check approval status, and update product status.</p>
             </div>
             <button 
               onClick={() => setCurrentView('marketplace')} 
@@ -461,7 +509,7 @@ export default function App() {
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
             <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
               <h3 className="font-bold text-gray-800 text-base">Your Listings ({myUserListings.length})</h3>
-              <button onClick={() => setIsModalOpen(true)} className="bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+              <button onClick={openCreateModal} className="bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
                 + Post New Ad
               </button>
             </div>
@@ -488,6 +536,12 @@ export default function App() {
                     </div>
                     <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
                       <button 
+                        onClick={() => openEditModal(item)}
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center"
+                      >
+                        <Edit3 size={14} className="mr-1" /> Edit
+                      </button>
+                      <button 
                         onClick={() => handleToggleStatus(item)}
                         className={`text-xs font-bold px-4 py-2 rounded-xl transition ${
                           item.status === 'Sold' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
@@ -513,7 +567,7 @@ export default function App() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Owner & Admin Control Center</h1>
-              <p className="text-sm text-gray-500">Approve pending ads and monitor platform engagement.</p>
+              <p className="text-sm text-gray-500">Approve pending ads, edit any user posts, and monitor platform engagement.</p>
             </div>
             <button onClick={() => setCurrentView('marketplace')} className="text-xs bg-white border border-gray-300 px-4 py-2 rounded-xl font-medium hover:bg-gray-50">
               ← Back to Marketplace
@@ -544,6 +598,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Pending Approval Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
             <div className="px-6 py-4 border-b bg-orange-50/70 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-base flex items-center">
@@ -565,10 +620,16 @@ export default function App() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <button 
+                        onClick={() => openEditModal(item)} 
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center"
+                      >
+                        <Edit3 size={14} className="mr-1" /> Edit
+                      </button>
+                      <button 
                         onClick={() => handleApproveListing(item.id)} 
                         className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition"
                       >
-                        ✓ Approve Ad
+                        ✓ Approve
                       </button>
                       <button 
                         onClick={(e) => handleDeleteListing(e, item)} 
@@ -581,6 +642,40 @@ export default function App() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* All Listings Management Section for Admin */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-base">All Platform Listings ({listings.length})</h3>
+            </div>
+            <div className="divide-y max-h-96 overflow-y-auto">
+              {listings.map(item => (
+                <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                  <div className="flex items-center space-x-4">
+                    <img src={item.image_url} alt={item.title} className="w-14 h-14 object-cover rounded-xl border" />
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
+                      <p className="text-xs font-semibold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city} · {item.category}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={() => openEditModal(item)} 
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center"
+                    >
+                      <Edit3 size={13} className="mr-1" /> Edit
+                    </button>
+                    <button 
+                      onClick={(e) => handleDeleteListing(e, item)} 
+                      className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </main>
       ) : (
@@ -598,7 +693,7 @@ export default function App() {
             </h1>
             {user ? (
               <button 
-                onClick={() => setIsModalOpen(true)}
+                onClick={openCreateModal}
                 className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition whitespace-nowrap"
               >
                 + Post {appMode === 'rental' ? 'Rental' : 'Ad'}
@@ -685,9 +780,16 @@ export default function App() {
                           <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
                             <span className="text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
                             {canModify && (
-                              <button onClick={(e) => handleDeleteListing(e, item)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Delete post">
-                                <Trash2 size={14} />
-                              </button>
+                              <div className="flex items-center space-x-1">
+                                {isPrivileged && (
+                                  <button onClick={() => openEditModal(item)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition" title="Edit post">
+                                    <Edit3 size={14} />
+                                  </button>
+                                )}
+                                <button onClick={(e) => handleDeleteListing(e, item)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Delete post">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -765,13 +867,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Post Ad Modal */}
+      {/* Post / Edit Ad Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full"><X size={20} /></button>
-            <h2 className="text-xl font-black text-gray-900 mb-4">Post in {appMode === 'rental' ? 'Rental' : 'Buy/Sell'}</h2>
-            <form onSubmit={handleCreateListing} className="space-y-4">
+            <h2 className="text-xl font-black text-gray-900 mb-4">{editingItem ? 'Edit Listing (Admin)' : 'Post a New Ad'}</h2>
+            <form onSubmit={handleSaveListing} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1">Item Title *</label>
                 <input type="text" required placeholder="e.g. Concrete Mixer / Honda Dio" className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
@@ -802,7 +904,7 @@ export default function App() {
                 <label className="block text-xs font-bold text-gray-600 mb-1">Upload Photo</label>
                 <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3.5 py-3 text-sm cursor-pointer hover:bg-gray-50 text-gray-600 transition">
                   <Upload size={16} className="mr-2 text-orange-600" />
-                  <span className="truncate font-medium">{imageFile ? imageFile.name : 'Choose file...'}</span>
+                  <span className="truncate font-medium">{imageFile ? imageFile.name : (editingItem ? 'Keep existing photo or choose new...' : 'Choose file...')}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setImageFile(e.target.files[0])} />
                 </label>
               </div>
@@ -811,7 +913,7 @@ export default function App() {
                 <textarea rows="3" placeholder="Mention condition, terms, features..." className="w-full border rounded-xl px-3.5 py-2.5 text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
               </div>
               <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm transition">
-                {posting ? 'Publishing...' : 'Publish Listing'}
+                {posting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
               </button>
             </form>
           </div>
