@@ -392,7 +392,7 @@ export default function App() {
       let targetUserId = userData?.id;
 
       if (!targetUserId) {
-        return alert('User must sign into Kenmeal Nepal with this email at least once before assigning a role!');
+        return alert('User must sign into Kinmel Nepal with this email at least once before assigning a role!');
       }
 
       const { error: upsertError } = await supabase
@@ -508,14 +508,14 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white pb-20 md:pb-4">
         <div className="max-w-4xl w-full text-center">
-          <h1 className="text-3xl md:text-6xl font-black tracking-tight mb-2">Kenmeal Nepal</h1>
+          <h1 className="text-3xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
           <p className="text-sm md:text-xl text-orange-100 mb-6 px-4">Make deals securely by contacting owners directly. Choose your section below:</p>
 
           <div className="mb-6 max-w-md mx-auto bg-white/10 border border-white/20 rounded-2xl p-3 md:p-4 backdrop-blur-md flex items-center justify-between shadow-lg">
             <div className="flex items-center space-x-3 text-left">
               <div className="bg-white text-orange-600 p-2 rounded-xl font-black"><Download size={18} /></div>
               <div>
-                <h4 className="font-bold text-xs md:text-sm">Install Kenmeal App</h4>
+                <h4 className="font-bold text-xs md:text-sm">Install Kinmel App</h4>
                 <p className="text-[10px] md:text-xs text-orange-100">Get quick access from your device!</p>
               </div>
             </div>
@@ -597,7 +597,7 @@ export default function App() {
               }}
               className="text-xl md:text-2xl font-black text-orange-600 tracking-tight cursor-pointer"
             >
-              Kenmeal
+              Kinmel
             </a>
             <span className="text-[10px] md:text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">Nepal</span>
             
@@ -1307,7 +1307,7 @@ export default function App() {
 
       <footer className="bg-white border-t mt-12 py-5 text-center text-xs text-gray-500 font-medium px-4">
         <p className="mb-1">Make deals by directly contacting the owner. For any assistance, our team is ready for you!</p>
-        <p className="text-[10px] text-gray-400">© 2026 Kenmeal Nepal · Powered by Supabase & Vercel</p>
+        <p className="text-[10px] text-gray-400">© 2026 Kinmel Nepal · Powered by Supabase & Vercel</p>
       </footer>
     </div>
   );
