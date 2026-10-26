@@ -475,6 +475,25 @@ export default function App() {
   const pendingListings = listings.filter(item => !item.is_approved);
   const myUserListings = listings.filter(item => user && item.user_id === user.id);
 
+  // Group Clicks per Listing for Option 2 display
+  const groupedClicks = clickLogs.reduce((acc, log) => {
+    const listingId = log.listings?.id || 'unknown';
+    if (!acc[listingId]) {
+      acc[listingId] = {
+        title: log.listings?.title || 'Deleted or Unknown Listing',
+        price: log.listings?.price,
+        city: log.listings?.city,
+        category: log.listings?.category,
+        clicks: []
+      };
+    }
+    acc[listingId].clicks.push({
+      viewer_email: log.viewer_email || 'Guest Visitor',
+      created_at: log.created_at
+    });
+    return acc;
+  }, {});
+
   if (!appMode && currentView === 'marketplace') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white pb-20 md:pb-4">
@@ -777,6 +796,49 @@ export default function App() {
               </div>
               <div className="p-3 bg-red-50 text-red-600 rounded-2xl"><Users size={20} /></div>
             </div>
+          </div>
+
+          {/* Grouped Ad Clicks & Visitor Log Section */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
+            <div className="px-4 md:px-6 py-3 border-b bg-blue-50/70 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
+                <MousePointerClick size={16} className="mr-2 text-blue-600" /> Ad Clicks Grouped by Listing ({Object.keys(groupedClicks).length})
+              </h3>
+            </div>
+            {Object.keys(groupedClicks).length === 0 ? (
+              <div className="p-6 text-center text-gray-400 text-xs">No clicks recorded yet. Click some ads on the marketplace to test!</div>
+            ) : (
+              <div className="divide-y max-h-96 overflow-y-auto">
+                {Object.entries(groupedClicks).map(([listingId, data]) => (
+                  <div key={listingId} className="p-4 hover:bg-gray-50/60 transition">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 mb-2">
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-sm">{data.title}</h4>
+                        <p className="text-[11px] text-gray-500">
+                          Rs. {data.price?.toLocaleString() || 'N/A'} · {data.city || 'N/A'} · <span className="text-orange-600 font-semibold">{data.category || 'General'}</span>
+                        </p>
+                      </div>
+                      <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2.5 py-1 rounded-full">
+                        {data.clicks.length} {data.clicks.length === 1 ? 'Click' : 'Clicks'}
+                      </span>
+                    </div>
+
+                    {/* Expandable or listed visitor emails */}
+                    <div className="bg-gray-50 rounded-xl p-2.5 mt-2 border border-gray-200/60">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Viewer Details:</p>
+                      <div className="space-y-1">
+                        {data.clicks.map((click, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs bg-white px-3 py-1.5 rounded-lg border border-gray-100">
+                            <span className="font-medium text-gray-800">✉️ {click.viewer_email}</span>
+                            <span className="text-[10px] text-gray-400">{new Date(click.created_at).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Owner Role Management Box */}
@@ -1202,7 +1264,7 @@ export default function App() {
                 </label>
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1">Description</label>
+                <label className="Item Title">Description</label>
                 <textarea rows="2.5" placeholder="Mention condition, terms..." className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
               </div>
               <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-xs md:text-sm transition shadow-sm">
