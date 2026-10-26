@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -14,6 +14,9 @@ export default function App() {
   const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // State to track which listings have their click viewer lists expanded
+  const [expandedClicks, setExpandedClicks] = useState({});
 
   // Screen Size Detection for Mobile vs PC Adjustments
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -494,6 +497,13 @@ export default function App() {
     return acc;
   }, {});
 
+  const toggleExpandListingClicks = (listingId) => {
+    setExpandedClicks(prev => ({
+      ...prev,
+      [listingId]: !prev[listingId]
+    }));
+  };
+
   if (!appMode && currentView === 'marketplace') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white pb-20 md:pb-4">
@@ -798,45 +808,65 @@ export default function App() {
             </div>
           </div>
 
-          {/* Grouped Ad Clicks & Visitor Log Section */}
+          {/* Grouped & Hideable Ad Clicks Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
             <div className="px-4 md:px-6 py-3 border-b bg-blue-50/70 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
-                <MousePointerClick size={16} className="mr-2 text-blue-600" /> Ad Clicks Grouped by Listing ({Object.keys(groupedClicks).length})
+                <MousePointerClick size={16} className="mr-2 text-blue-600" /> Ad Clicks Summary ({Object.keys(groupedClicks).length} Listings Clicked)
               </h3>
             </div>
             {Object.keys(groupedClicks).length === 0 ? (
               <div className="p-6 text-center text-gray-400 text-xs">No clicks recorded yet. Click some ads on the marketplace to test!</div>
             ) : (
-              <div className="divide-y max-h-96 overflow-y-auto">
-                {Object.entries(groupedClicks).map(([listingId, data]) => (
-                  <div key={listingId} className="p-4 hover:bg-gray-50/60 transition">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 mb-2">
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-sm">{data.title}</h4>
-                        <p className="text-[11px] text-gray-500">
-                          Rs. {data.price?.toLocaleString() || 'N/A'} · {data.city || 'N/A'} · <span className="text-orange-600 font-semibold">{data.category || 'General'}</span>
-                        </p>
+              <div className="divide-y max-h-[500px] overflow-y-auto">
+                {Object.entries(groupedClicks).map(([listingId, data]) => {
+                  const isExpanded = !!expandedClicks[listingId];
+                  return (
+                    <div key={listingId} className="p-4 hover:bg-gray-50/60 transition">
+                      {/* Clickable Header Row showing total clicks */}
+                      <div 
+                        onClick={() => toggleExpandListingClicks(listingId)}
+                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 cursor-pointer select-none"
+                      >
+                        <div>
+                          <h4 className="font-bold text-gray-900 text-sm flex items-center">
+                            {data.title}
+                          </h4>
+                          <p className="text-[11px] text-gray-500">
+                            Rs. {data.price?.toLocaleString() || 'N/A'} · {data.city || 'N/A'} · <span className="text-orange-600 font-semibold">{data.category || 'General'}</span>
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
+                          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full shadow-2xs">
+                            {data.clicks.length} {data.clicks.length === 1 ? 'Click' : 'Clicks'} (Click to {isExpanded ? 'Hide' : 'Show'} List)
+                          </span>
+                          <span className="text-gray-400 bg-gray-100 p-1.5 rounded-full">
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </span>
+                        </div>
                       </div>
-                      <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                        {data.clicks.length} {data.clicks.length === 1 ? 'Click' : 'Clicks'}
-                      </span>
-                    </div>
 
-                    {/* Expandable or listed visitor emails */}
-                    <div className="bg-gray-50 rounded-xl p-2.5 mt-2 border border-gray-200/60">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Viewer Details:</p>
-                      <div className="space-y-1">
-                        {data.clicks.map((click, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-xs bg-white px-3 py-1.5 rounded-lg border border-gray-100">
-                            <span className="font-medium text-gray-800">✉️ {click.viewer_email}</span>
-                            <span className="text-[10px] text-gray-400">{new Date(click.created_at).toLocaleString()}</span>
+                      {/* Expandable/Hideable Visitor List */}
+                      {isExpanded && (
+                        <div className="bg-gray-50 rounded-xl p-3 mt-3 border border-gray-200/80 animate-fadeIn">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Viewer Details ({data.clicks.length}):</p>
+                          <div className="space-y-1.5">
+                            {data.clicks.map((click, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-xs bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-2xs">
+                                <span className="font-medium text-gray-800 flex items-center">
+                                  ✉️ <span className="ml-1.5 font-semibold text-gray-900">{click.viewer_email}</span>
+                                </span>
+                                <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
+                                  {new Date(click.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1264,7 +1294,7 @@ export default function App() {
                 </label>
               </div>
               <div>
-                <label className="Item Title">Description</label>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Description</label>
                 <textarea rows="2.5" placeholder="Mention condition, terms..." className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
               </div>
               <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-xs md:text-sm transition shadow-sm">
