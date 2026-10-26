@@ -107,14 +107,18 @@ export default function App() {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
-      alert('To install this app on mobile, tap your browser menu (three dots) and select "Add to Home Screen" or "Install App".');
-      return;
+    if (deferredPrompt) {
+      // If mobile browser has captured the prompt event, fire it natively
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      // Graceful fallback for Desktop PC or browsers where prompt isn't pre-loaded yet
+      alert('To install Kinmel:\n• On Mobile: Tap your browser menu (three dots) and select "Add to Home Screen" or "Install App".\n• On PC/Desktop: Click the install icon in your browser address bar.');
     }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to the install prompt: ${outcome}`);
-    setDeferredPrompt(null);
   };
 
   async function fetchUserRole(userId) {
