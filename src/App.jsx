@@ -67,6 +67,11 @@ export default function App() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+    window.addEventListener('appinstalled', () => {
+      setDeferredPrompt(null);
+      console.log('App was successfully installed');
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -108,9 +113,8 @@ export default function App() {
     }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-    }
+    console.log(`User response to the install prompt: ${outcome}`);
+    setDeferredPrompt(null);
   };
 
   async function fetchUserRole(userId) {
@@ -491,7 +495,7 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white pb-20 md:pb-4">
         <div className="max-w-4xl w-full text-center">
           <h1 className="text-3xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
-          <p className="text-sm md:text-xl text-orange-100 mb-6 px-4">Make deals securely by contacting owners directly. Choose your section below:</p>
+          <p className="text-sm md:text-xl text-orange-100 mb-6 px-4">Buy, sell and rent anything from anywhere. Choose your section below:</p>
 
           <div className="mb-6 max-w-md mx-auto bg-white/10 border border-white/20 rounded-2xl p-3 md:p-4 backdrop-blur-md flex items-center justify-between shadow-lg">
             <div className="flex items-center space-x-3 text-left">
