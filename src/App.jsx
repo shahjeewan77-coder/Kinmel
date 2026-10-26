@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -15,8 +15,8 @@ export default function App() {
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // State to track which listings have their click viewer lists expanded
-  const [expandedClicks, setExpandedClicks] = useState({});
+  // State to track which date groups have their click lists expanded in the Control Center
+  const [expandedDates, setExpandedDates] = useState({});
 
   // Screen Size Detection for Mobile vs PC Adjustments
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -478,29 +478,25 @@ export default function App() {
   const pendingListings = listings.filter(item => !item.is_approved);
   const myUserListings = listings.filter(item => user && item.user_id === user.id);
 
-  // Group Clicks per Listing for Option 2 display
-  const groupedClicks = clickLogs.reduce((acc, log) => {
-    const listingId = log.listings?.id || 'unknown';
-    if (!acc[listingId]) {
-      acc[listingId] = {
-        title: log.listings?.title || 'Deleted or Unknown Listing',
-        price: log.listings?.price,
-        city: log.listings?.city,
-        category: log.listings?.category,
-        clicks: []
-      };
+  // Group Clicks Date-Wise
+  const clicksByDate = clickLogs.reduce((acc, log) => {
+    const dateStr = log.created_at ? new Date(log.created_at).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }) : 'Unknown Date';
+
+    if (!acc[dateStr]) {
+      acc[dateStr] = [];
     }
-    acc[listingId].clicks.push({
-      viewer_email: log.viewer_email || 'Guest Visitor',
-      created_at: log.created_at
-    });
+    acc[dateStr].push(log);
     return acc;
   }, {});
 
-  const toggleExpandListingClicks = (listingId) => {
-    setExpandedClicks(prev => ({
+  const toggleExpandDate = (dateStr) => {
+    setExpandedDates(prev => ({
       ...prev,
-      [listingId]: !prev[listingId]
+      [dateStr]: !prev[dateStr]
     }));
   };
 
@@ -808,37 +804,35 @@ export default function App() {
             </div>
           </div>
 
-          {/* Grouped & Hideable Ad Clicks Section */}
+          {/* Date-Wise Ad Clicks Summary Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
             <div className="px-4 md:px-6 py-3 border-b bg-blue-50/70 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
-                <MousePointerClick size={16} className="mr-2 text-blue-600" /> Ad Clicks Summary ({Object.keys(groupedClicks).length} Listings Clicked)
+                <Calendar size={16} className="mr-2 text-blue-600" /> Ad Clicks Date-Wise ({Object.keys(clicksByDate).length} Days Recorded)
               </h3>
             </div>
-            {Object.keys(groupedClicks).length === 0 ? (
+            {Object.keys(clicksByDate).length === 0 ? (
               <div className="p-6 text-center text-gray-400 text-xs">No clicks recorded yet. Click some ads on the marketplace to test!</div>
             ) : (
-              <div className="divide-y max-h-[500px] overflow-y-auto">
-                {Object.entries(groupedClicks).map(([listingId, data]) => {
-                  const isExpanded = !!expandedClicks[listingId];
+              <div className="divide-y max-h-[550px] overflow-y-auto">
+                {Object.entries(clicksByDate).map(([dateStr, logs]) => {
+                  const isExpanded = !!expandedDates[dateStr];
                   return (
-                    <div key={listingId} className="p-4 hover:bg-gray-50/60 transition">
-                      {/* Clickable Header Row showing total clicks */}
+                    <div key={dateStr} className="p-4 hover:bg-gray-50/60 transition">
+                      {/* Date Header Row */}
                       <div 
-                        onClick={() => toggleExpandListingClicks(listingId)}
+                        onClick={() => toggleExpandDate(dateStr)}
                         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 cursor-pointer select-none"
                       >
-                        <div>
-                          <h4 className="font-bold text-gray-900 text-sm flex items-center">
-                            {data.title}
+                        <div className="flex items-center space-x-2">
+                          <span className="p-2 bg-blue-100 text-blue-700 rounded-xl"><Calendar size={16} /></span>
+                          <h4 className="font-bold text-gray-900 text-sm md:text-base">
+                            {dateStr}
                           </h4>
-                          <p className="text-[11px] text-gray-500">
-                            Rs. {data.price?.toLocaleString() || 'N/A'} · {data.city || 'N/A'} · <span className="text-orange-600 font-semibold">{data.category || 'General'}</span>
-                          </p>
                         </div>
                         <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
-                          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full shadow-2xs">
-                            {data.clicks.length} {data.clicks.length === 1 ? 'Click' : 'Clicks'} (Click to {isExpanded ? 'Hide' : 'Show'} List)
+                          <span className="bg-blue-50 text-blue-800 border border-blue-200 text-xs font-bold px-3 py-1 rounded-full shadow-2xs">
+                            {logs.length} {logs.length === 1 ? 'Click' : 'Clicks'} (Click to {isExpanded ? 'Hide' : 'Show'} Details)
                           </span>
                           <span className="text-gray-400 bg-gray-100 p-1.5 rounded-full">
                             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -846,19 +840,27 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Expandable/Hideable Visitor List */}
+                      {/* Expandable Click Details for this Date */}
                       {isExpanded && (
-                        <div className="bg-gray-50 rounded-xl p-3 mt-3 border border-gray-200/80 animate-fadeIn">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Viewer Details ({data.clicks.length}):</p>
+                        <div className="bg-gray-50 rounded-xl p-3 mt-3 border border-gray-200/80 animate-fadeIn space-y-2">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Clicks on {dateStr}:</p>
                           <div className="space-y-1.5">
-                            {data.clicks.map((click, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-xs bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-2xs">
-                                <span className="font-medium text-gray-800 flex items-center">
-                                  ✉️ <span className="ml-1.5 font-semibold text-gray-900">{click.viewer_email}</span>
-                                </span>
-                                <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
-                                  {new Date(click.created_at).toLocaleString()}
-                                </span>
+                            {logs.map((log, idx) => (
+                              <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-2xs gap-1">
+                                <div>
+                                  <span className="font-bold text-gray-900">
+                                    {log.listings?.title || 'Deleted or Unknown Listing'}
+                                  </span>
+                                  <p className="text-[11px] text-gray-500">
+                                    Rs. {log.listings?.price?.toLocaleString() || 'N/A'} · {log.listings?.city || 'N/A'}
+                                  </p>
+                                </div>
+                                <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end pt-1 sm:pt-0 border-t sm:border-0 border-gray-100">
+                                  <span className="font-medium text-gray-700">✉️ {log.viewer_email || 'Guest'}</span>
+                                  <span className="text-[10px] text-orange-600 bg-orange-50 px-2 py-0.5 rounded font-semibold">
+                                    {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
                               </div>
                             ))}
                           </div>
