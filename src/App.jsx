@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, Calendar, LogOut } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, Calendar, Eye, EyeOff } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -14,6 +14,14 @@ export default function App() {
   const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  // Phone Auth States
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpToken, setOtpToken] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // State for date filter input inside Control Center (Defaults to today's date YYYY-MM-DD)
   const [clickDateFilter, setClickDateFilter] = useState(new Date().toISOString().split('T')[0]);
@@ -37,7 +45,9 @@ export default function App() {
   const [newCity, setNewCity] = useState('Dhangadhi');
   const [newPhone, setNewPhone] = useState('');
   const [newNegotiable, setNewNegotiable] = useState(true);
-  const [imageFile, setImageFile] = useState(null);
+  
+  // Multiple Image States
+  const [imageFiles, setImageFiles] = useState([]);
   const [posting, setPosting] = useState(false);
 
   // Role Assignment State inside Control Center
@@ -110,7 +120,6 @@ export default function App() {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
       if (outcome === 'accepted') {
         setDeferredPrompt(null);
       }
@@ -200,6 +209,58 @@ export default function App() {
     });
   };
 
+  // Phone Auth Handlers
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!phoneNumber) return alert('Please enter your mobile number!');
+    
+    let formattedPhone = phoneNumber.trim();
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = `+977${formattedPhone}`;
+    }
+
+    try {
+      setAuthLoading(true);
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
+      });
+
+      if (error) throw error;
+      setOtpSent(true);
+      alert('OTP code sent successfully to your phone!');
+    } catch (err) {
+      alert('Error sending OTP: ' + err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otpToken) return alert('Please enter the OTP code!');
+
+    let formattedPhone = phoneNumber.trim();
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = `+977${formattedPhone}`;
+    }
+
+    try {
+      setAuthLoading(true);
+      const { error } = await supabase.auth.verifyOtp({
+        phone: formattedPhone,
+        token: otpToken.trim(),
+        type: 'sms',
+      });
+
+      if (error) throw error;
+      alert('Successfully logged in!');
+    } catch (err) {
+      alert('Invalid OTP code: ' + err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUserRole('user');
@@ -208,6 +269,7 @@ export default function App() {
   };
 
   const handleCardClick = async (item) => {
+    setActiveImageIndex(0);
     setSelectedItem(item);
     try {
       await supabase.from('listing_clicks').insert([
@@ -215,7 +277,7 @@ export default function App() {
           listing_id: item.id,
           owner_id: item.user_id,
           viewer_id: user ? user.id : null,
-          viewer_email: user ? user.email : 'Guest Visitor'
+          viewer_email: user ? user.email : (user?.phone || 'Guest Visitor')
         }
       ]);
     } catch (err) {
@@ -233,7 +295,7 @@ export default function App() {
     setNewNegotiable(item.negotiable ?? true);
     const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Construction';
     setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Construction');
-    setImageFile(null);
+    setImageFiles([]);
     setIsModalOpen(true);
   };
 
@@ -246,7 +308,7 @@ export default function App() {
     setNewPhone('');
     setNewNegotiable(true);
     setNewCategory('Construction');
-    setImageFile(null);
+    setImageFiles([]);
     setIsModalOpen(true);
   };
 
@@ -256,22 +318,42 @@ export default function App() {
 
     try {
       setPosting(true);
-      let imageUrl = editingItem ? editingItem.image_url : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
+      
+      // Determine existing images array or fallback string
+      let imageUrls = [];
+      if (editingItem) {
+        if (Array.isArray(editingItem.image_url)) {
+          imageUrls = [...editingItem.image_url];
+        } else if (typeof editingItem.image_url === 'string') {
+          imageUrls = [editingItem.image_url];
+        }
+      }
 
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('listing-images')
-          .upload(fileName, imageFile);
+      // Upload new selected images in parallel
+      if (imageFiles && imageFiles.length > 0) {
+        const uploadPromises = Array.from(imageFiles).map(async (file, index) => {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from('listing-images')
+            .upload(fileName, file);
 
-        if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-        const { data: publicURLData } = supabase.storage
-          .from('listing-images')
-          .getPublicUrl(fileName);
+          const { data: publicURLData } = supabase.storage
+            .from('listing-images')
+            .getPublicUrl(fileName);
 
-        imageUrl = publicURLData.publicUrl;
+          return publicURLData.publicUrl;
+        });
+
+        const uploadedUrls = await Promise.all(uploadPromises);
+        imageUrls = [...imageUrls, ...uploadedUrls];
+      }
+
+      // Fallback default image if none available
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
       }
 
       let finalCategory = newCategory;
@@ -293,7 +375,7 @@ export default function App() {
           city: newCity,
           phone: newPhone,
           negotiable: newNegotiable,
-          image_url: imageUrl
+          image_url: imageUrls // Store array of images
         };
 
         const { error } = await supabase.from('listings').update(updateData).eq('id', editingItem.id);
@@ -308,7 +390,7 @@ export default function App() {
           city: newCity,
           phone: newPhone,
           negotiable: newNegotiable,
-          image_url: imageUrl,
+          image_url: imageUrls, // Store array of images
           user_id: user.id,
           is_approved: isOwnerOrAdmin,
           status: 'Active',
@@ -384,7 +466,7 @@ export default function App() {
   const handleAssignRoleFromApp = async (e) => {
     e.preventDefault();
     if (!isOwner) return alert('Only the Owner can assign roles.');
-    if (!targetEmail) return alert('Please enter an email address.');
+    if (!targetEmail) return alert('Please enter an identifier.');
 
     try {
       setUpdatingRole(true);
@@ -398,7 +480,7 @@ export default function App() {
       let targetUserId = userData?.id;
 
       if (!targetUserId) {
-        return alert('User must sign into Kinmel Nepal with this email at least once before assigning a role!');
+        return alert('User must sign into Kinmel Nepal first before assigning a role!');
       }
 
       const { error: upsertError } = await supabase
@@ -409,47 +491,13 @@ export default function App() {
 
       if (upsertError) throw upsertError;
 
-      alert(`Successfully assigned role '${assignedRoleSelect}' to ${targetEmail}!`);
+      alert(`Successfully assigned role '${assignedRoleSelect}'!`);
       setTargetEmail('');
       fetchTeamMembers();
     } catch (err) {
       alert('Error updating role: ' + err.message);
     } finally {
       setUpdatingRole(false);
-    }
-  };
-
-  const handleUpdateMemberRole = async (memberId, newRole) => {
-    if (!isOwner) return alert('Only the Owner can modify roles.');
-    try {
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ role: newRole })
-        .eq('id', memberId);
-
-      if (error) throw error;
-      alert('Role updated successfully!');
-      fetchTeamMembers();
-    } catch (err) {
-      alert('Error updating role: ' + err.message);
-    }
-  };
-
-  const handleDeleteTeamMember = async (memberId, memberEmail) => {
-    if (!isOwner) return alert('Only the Owner can remove team members.');
-    if (!confirm(`Are you sure you want to remove role permissions for ${memberEmail}?`)) return;
-
-    try {
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('id', memberId);
-
-      if (error) throw error;
-      alert('Team member role removed successfully!');
-      fetchTeamMembers();
-    } catch (err) {
-      alert('Error removing member: ' + err.message);
     }
   };
 
@@ -491,106 +539,230 @@ export default function App() {
     return logDate === clickDateFilter;
   });
 
+  // Helper to safely extract image URLs as an array
+  const getItemImages = (item) => {
+    if (!item?.image_url) return ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
+    if (Array.isArray(item.image_url)) return item.image_url;
+    return [item.image_url];
+  };
+
+  // INITIAL LANDING DISPLAY SCREEN
   if (!appMode && currentView === 'marketplace') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white pb-20 md:pb-4">
-        <div className="max-w-4xl w-full text-center">
-          <h1 className="text-3xl md:text-6xl font-black tracking-tight mb-2">Kinmel Nepal</h1>
-          <p className="text-sm md:text-xl text-orange-100 mb-6 px-4">Buy, sell and rent anything from anywhere. Choose your section below:</p>
-
-          <div className="mb-6 max-w-md mx-auto bg-white/10 border border-white/20 rounded-2xl p-3 md:p-4 backdrop-blur-md flex items-center justify-between shadow-lg">
-            <div className="flex items-center space-x-3 text-left">
-              <div className="bg-white text-orange-600 p-2 rounded-xl font-black"><Download size={18} /></div>
-              <div>
-                <h4 className="font-bold text-xs md:text-sm">Install Kinmel App</h4>
-                <p className="text-[10px] md:text-xs text-orange-100">Get quick access from your device!</p>
-              </div>
+      <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
+        <header className="border-b bg-white sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center space-x-8">
+              <span className="text-2xl font-black text-orange-600 tracking-tight cursor-pointer">Kinmel</span>
+              <nav className="hidden md:flex items-center space-x-6 text-sm font-semibold text-gray-600">
+                <a href="#" className="hover:text-orange-600 transition">Home</a>
+                <a href="#" className="hover:text-orange-600 transition">About boosting</a>
+                <a href="#" className="hover:text-orange-600 transition">FAQ</a>
+                <a href="#" className="hover:text-orange-600 transition">Contact us</a>
+                <a href="#" className="hover:text-orange-600 transition">Subscription plans</a>
+              </nav>
             </div>
-            <button 
-              onClick={handleInstallClick}
-              className="bg-white text-orange-600 hover:bg-orange-50 text-xs font-black px-3.5 py-2 rounded-xl shadow transition whitespace-nowrap"
-            >
-              Download
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-2xl mx-auto px-2">
-            <div 
-              onClick={() => { setAppMode('rental'); setSelectedCategory('All'); }}
-              className="bg-white text-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl hover:scale-102 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-amber-400"
-            >
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-black mb-3 group-hover:bg-orange-600 group-hover:text-white transition">
-                🏠
-              </div>
-              <h2 className="text-xl md:text-2xl font-black mb-1">Rental</h2>
-              <p className="text-xs md:text-sm text-gray-500 mb-4">Find equipment, shuttering tools, rooms, vehicles, or items available for rent.</p>
-              <span className="inline-flex items-center text-xs md:text-sm font-bold text-orange-600 group-hover:translate-x-1 transition">
-                Enter Rental <ArrowRight size={16} className="ml-1.5" />
-              </span>
-            </div>
-
-            <div 
-              onClick={() => { setAppMode('buysell'); setSelectedCategory('All'); }}
-              className="bg-white text-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl hover:scale-102 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-orange-400"
-            >
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-orange-100 text-orange-700 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-black mb-3 group-hover:bg-orange-600 group-hover:text-white transition">
-                🛒
-              </div>
-              <h2 className="text-xl md:text-2xl font-black mb-1">Buy / Sell</h2>
-              <p className="text-xs md:text-sm text-gray-500 mb-4">Buy pre-owned goods, smartphones, electronics, or sell your items for cash.</p>
-              <span className="inline-flex items-center text-xs md:text-sm font-bold text-orange-600 group-hover:translate-x-1 transition">
-                Enter Buy / Sell <ArrowRight size={16} className="ml-1.5" />
-              </span>
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={handleInstallClick}
+                className="hidden lg:flex items-center text-xs bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 px-3 py-2 rounded-xl font-bold transition"
+              >
+                <Download size={14} className="mr-1.5" /> App
+              </button>
+              {user && (
+                <button
+                  onClick={() => setCurrentView('my-dashboard')}
+                  className="text-xs bg-orange-600 text-white font-bold px-3.5 py-2 rounded-xl"
+                >
+                  My Dashboard
+                </button>
+              )}
             </div>
           </div>
+        </header>
 
-          <div className="mt-8 flex items-center justify-center space-x-3 flex-wrap gap-y-2">
-            {user && (
-              <button
-                onClick={() => setCurrentView('my-dashboard')}
-                className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-5 py-2.5 rounded-2xl backdrop-blur-md transition flex items-center"
+        <div className="bg-gray-50 border-b py-3 px-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex-1 max-w-2xl relative">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400"><Search size={18} /></span>
+              <input
+                type="text"
+                placeholder="Search for anything..."
+                className="w-full pl-10 pr-4 py-2.5 border rounded-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="hidden md:flex items-center space-x-3 ml-4">
+              <button 
+                onClick={() => { setAppMode('rental'); setSelectedCategory('All'); }}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition flex items-center"
               >
-                <UserCheck size={14} className="mr-1.5" /> My Dashboard ({myUserListings.length})
+                🏠 Enter Rental Section
               </button>
-            )}
-            {isPrivileged && (
-              <button
-                onClick={() => setCurrentView('admin-dashboard')}
-                className="bg-black/30 hover:bg-black/50 text-white text-xs font-bold px-5 py-2.5 rounded-2xl backdrop-blur-md transition"
+              <button 
+                onClick={() => { setAppMode('buysell'); setSelectedCategory('All'); }}
+                className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition flex items-center"
               >
-                🛡️ Control Center {pendingListings.length > 0 && `(${pendingListings.length})`}
+                🛒 Enter Buy & Sell Section
               </button>
-            )}
-            {user && (
-              <button
-                onClick={handleLogout}
-                className="bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold px-4 py-2.5 rounded-2xl backdrop-blur-md transition flex items-center"
-              >
-                <LogOut size={14} className="mr-1.5" /> Sign Out ({user.email})
-              </button>
-            )}
+            </div>
           </div>
         </div>
+
+        <main className="max-w-7xl mx-auto px-4 py-10 md:py-16 flex-1 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="flex flex-col items-start space-y-6">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tight mb-2">Download Kinmel app</h2>
+              <p className="text-sm md:text-base text-gray-500 font-medium">Scan and discover great deals on the go!</p>
+            </div>
+
+            <div className="bg-white border-2 border-gray-200 p-4 rounded-3xl shadow-sm inline-block">
+              <div className="w-48 h-48 bg-gray-900 rounded-2xl flex items-center justify-center text-white p-3">
+                <div className="w-full h-full border-4 border-white flex flex-col justify-between p-2 font-mono text-[9px] text-center bg-white text-black font-bold tracking-tighter">
+                  <div className="flex justify-between"><span>■■■</span><span>■■■</span></div>
+                  <div className="my-auto">SCAN TO DOWNLOAD APP</div>
+                  <div className="flex justify-between"><span>■■■</span><span>■■■</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="bg-black text-white px-4 py-2.5 rounded-xl flex items-center space-x-2 cursor-pointer hover:bg-gray-800 transition">
+                <span className="text-xl">▶</span>
+                <div className="text-left leading-tight">
+                  <div className="text-[9px] uppercase font-semibold text-gray-300">Get it on</div>
+                  <div className="text-xs font-bold">Google Play</div>
+                </div>
+              </div>
+              <div className="bg-black text-white px-4 py-2.5 rounded-xl flex items-center space-x-2 cursor-pointer hover:bg-gray-800 transition">
+                <span className="text-xl"></span>
+                <div className="text-left leading-tight">
+                  <div className="text-[9px] uppercase font-semibold text-gray-300">Download on the</div>
+                  <div className="text-xs font-bold">App Store</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-xl max-w-md w-full mx-auto">
+            <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-6">Login</h2>
+
+            {!otpSent ? (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div>
+                  <div className="relative flex items-center border border-gray-300 rounded-2xl bg-gray-50 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500">
+                    <div className="flex items-center pl-3 pr-2 py-3 bg-gray-100 border-r text-xs font-bold text-gray-700">
+                      🇳🇵 +977
+                    </div>
+                    <input 
+                      type="tel" 
+                      required 
+                      placeholder="Phone Number" 
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      className="w-full px-3 py-3 text-sm bg-transparent outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="relative flex items-center border border-gray-300 rounded-2xl bg-gray-50 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500">
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      placeholder="Password / PIN" 
+                      className="w-full px-4 py-3 text-sm bg-transparent outline-none"
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="pr-4 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={authLoading}
+                  className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3.5 rounded-2xl text-sm transition shadow-md"
+                >
+                  {authLoading ? 'Sending OTP...' : 'Log In'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Enter 6-digit OTP code sent to phone</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="123456" 
+                    value={otpToken}
+                    onChange={(e) => setOtpToken(e.target.value)}
+                    className="w-full border rounded-2xl px-4 py-3 text-center tracking-widest text-lg font-bold bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={authLoading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-2xl text-sm transition shadow-md"
+                >
+                  {authLoading ? 'Verifying...' : 'Verify & Login'}
+                </button>
+              </form>
+            )}
+
+            <div className="text-center mt-4">
+              <a href="#" onClick={(e) => { e.preventDefault(); alert('Password reset sent to registered phone.'); }} className="text-xs font-bold text-gray-600 hover:text-orange-600 underline">
+                Forgot password?
+              </a>
+            </div>
+
+            <div className="mt-6 pt-6 border-t text-center">
+              <button 
+                onClick={handleGoogleLogin} 
+                className="w-full border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold py-3 rounded-2xl text-xs flex items-center justify-center space-x-2 transition"
+              >
+                <span>🌐</span>
+                <span>Continue with Google Sign-In</span>
+              </button>
+            </div>
+          </div>
+        </main>
+
+        <div className="bg-gray-50 border-t py-8 px-4">
+          <div className="max-w-3xl mx-auto text-center">
+            <h3 className="font-black text-gray-800 text-lg mb-4">Or jump directly into sections:</h3>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <button 
+                onClick={() => { setAppMode('rental'); setSelectedCategory('All'); }}
+                className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold px-6 py-3 rounded-2xl text-sm transition flex items-center justify-center space-x-2"
+              >
+                <span>🏠 Browse Rental Marketplace</span>
+              </button>
+              <button 
+                onClick={() => { setAppMode('buysell'); setSelectedCategory('All'); }}
+                className="bg-orange-100 hover:bg-orange-200 text-orange-900 font-bold px-6 py-3 rounded-2xl text-sm transition flex items-center justify-center space-x-2"
+              >
+                <span>🛒 Browse Buy & Sell Marketplace</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <footer className="bg-white border-t py-4 text-center text-xs text-gray-500">
+          <p>© 2026 Kinmel Nepal · Powered by Supabase & Vercel</p>
+        </footer>
       </div>
     );
   }
 
+  // MAIN MARKETPLACE / DASHBOARD VIEWS
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans pb-20 md:pb-0">
-      {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50 shadow-xs">
-        {/* Mobile Username Top Banner */}
-        {user && (
-          <div className="bg-orange-50 border-b border-orange-100 px-4 py-1.5 flex items-center justify-between text-xs md:hidden">
-            <span className="font-bold text-orange-800 truncate">
-              Hi, {user.user_metadata?.full_name || user.email?.split('@')[0] || user.email}
-            </span>
-            <span className="text-[10px] text-orange-600 font-semibold bg-orange-100 px-2 py-0.5 rounded-full">
-              {user.email}
-            </span>
-          </div>
-        )}
-
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2 md:space-x-3">
             <a 
@@ -680,25 +852,18 @@ export default function App() {
                 >
                   <PlusCircle size={14} className="mr-1" /> Post
                 </button>
-                {/* Sign Out Button placed right beside Post */}
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-2 rounded-xl text-xs font-bold flex items-center transition"
-                  title="Sign Out"
-                >
-                  <LogOut size={14} className="md:mr-1" />
-                  <span className="hidden md:inline">Sign Out</span>
+                <button onClick={handleLogout} className="text-xs border border-gray-300 px-2.5 py-2 rounded-xl hover:bg-gray-100 font-medium text-gray-700 hidden lg:inline">
+                  Sign Out
                 </button>
               </div>
             ) : (
-              <button onClick={handleGoogleLogin} className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm">
+              <button onClick={() => setAppMode(null)} className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm">
                 Sign in
               </button>
             )}
           </div>
         </div>
 
-        {/* Mobile Search Bar Row */}
         <div className="px-4 pb-3 md:hidden">
           <div className="relative w-full">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Search size={16} /></span>
@@ -740,47 +905,51 @@ export default function App() {
               <div className="p-10 text-center text-gray-400 text-xs md:text-sm">You haven't posted any ads yet.</div>
             ) : (
               <div className="divide-y">
-                {myUserListings.map(item => (
-                  <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
-                    <div className="flex items-center space-x-3">
-                      <img src={item.image_url} alt={item.title} className="w-16 h-16 object-cover rounded-xl border shrink-0" />
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1 flex-wrap gap-y-1">
-                          <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {item.status || 'Active'}
-                          </span>
+                {myUserListings.map(item => {
+                  const itemImgs = getItemImages(item);
+                  return (
+                    <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
+                      <div className="flex items-center space-x-3">
+                        <img src={itemImgs[0]} alt={item.title} className="w-16 h-16 object-cover rounded-xl border shrink-0" />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1 flex-wrap gap-y-1">
+                            <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                              {item.status || 'Active'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {item.is_approved ? <span className="text-green-600 font-semibold">Approved</span> : <span className="text-amber-600 font-semibold">Pending Review</span>}
+                            {itemImgs.length > 1 && <span className="ml-2 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-semibold">{itemImgs.length} Photos</span>}
+                          </p>
                         </div>
-                        <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {item.is_approved ? <span className="text-green-600 font-semibold">Approved</span> : <span className="text-amber-600 font-semibold">Pending Review</span>}
-                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-0 border-gray-100">
+                        <button 
+                          onClick={() => openEditModal(item)}
+                          className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center"
+                        >
+                          <Edit3 size={12} className="mr-1" /> Edit
+                        </button>
+                        <button 
+                          onClick={() => handleToggleStatus(item)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${
+                            item.status === 'Sold' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {item.status === 'Sold' ? 'Active' : 'Mark Sold'}
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteListing(e, item)} 
+                          className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl transition"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-0 border-gray-100">
-                      <button 
-                        onClick={() => openEditModal(item)}
-                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center"
-                      >
-                        <Edit3 size={12} className="mr-1" /> Edit
-                      </button>
-                      <button 
-                        onClick={() => handleToggleStatus(item)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${
-                          item.status === 'Sold' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}
-                      >
-                        {item.status === 'Sold' ? 'Active' : 'Mark Sold'}
-                      </button>
-                      <button 
-                        onClick={(e) => handleDeleteListing(e, item)} 
-                        className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl transition"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -821,7 +990,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Ad Clicks Filtered by Date Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
             <div className="px-4 md:px-6 py-3.5 border-b bg-blue-50/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
@@ -854,7 +1022,7 @@ export default function App() {
                     </div>
                     <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end pt-1 sm:pt-0 border-t sm:border-0 border-gray-100">
                       <span className="font-medium text-gray-800 bg-gray-100 px-2.5 py-1 rounded-lg">
-                        ✉️ {log.viewer_email || 'Guest Visitor'}
+                        👤 {log.viewer_email || 'Guest Visitor'}
                       </span>
                       <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg font-bold">
                         {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -865,127 +1033,15 @@ export default function App() {
               </div>
             )}
           </div>
-
-          {/* Owner Role Management Box */}
-          {isOwner && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6 p-4 md:p-6">
-              <h3 className="font-bold text-gray-900 text-sm md:text-base mb-1 flex items-center">
-                <Users size={16} className="mr-2 text-orange-600" /> Quick Team Role Manager
-              </h3>
-              <p className="text-xs text-gray-500 mb-4">Assign team roles by email after members sign in once.</p>
-              
-              <form onSubmit={handleAssignRoleFromApp} className="flex flex-col sm:flex-row gap-2.5 mb-4">
-                <input 
-                  type="email" 
-                  required 
-                  placeholder="team-member@gmail.com" 
-                  value={targetEmail}
-                  onChange={(e) => setTargetEmail(e.target.value)}
-                  className="flex-1 border rounded-xl px-3.5 py-2 text-xs md:text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500" 
-                />
-                <select 
-                  value={assignedRoleSelect}
-                  onChange={(e) => setAssignedRoleSelect(e.target.value)}
-                  className="border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-orange-500"
-                >
-                  <option value="admin">Admin</option>
-                  <option value="editor">Editor</option>
-                  <option value="responder">Responder</option>
-                </select>
-                <button 
-                  type="submit" 
-                  disabled={updatingRole}
-                  className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition whitespace-nowrap"
-                >
-                  {updatingRole ? 'Updating...' : 'Assign'}
-                </button>
-              </form>
-
-              {/* Team Members List */}
-              <div className="border rounded-xl overflow-hidden mt-4">
-                <div className="bg-gray-50 px-3.5 py-2.5 border-b text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-                  <span>Team Email</span>
-                  <span>Role / Actions</span>
-                </div>
-                {teamMembers.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-gray-400">
-                    <button onClick={fetchTeamMembers} className="text-orange-600 underline font-semibold">Click to load team directory</button>
-                  </div>
-                ) : (
-                  <div className="divide-y text-xs">
-                    {teamMembers.map(member => (
-                      <div key={member.id} className="px-3.5 py-2.5 flex items-center justify-between hover:bg-gray-50/50">
-                        <span className="font-medium text-gray-800 truncate max-w-[180px] md:max-w-xs">{member.email || member.id}</span>
-                        <div className="flex items-center space-x-2">
-                          <select 
-                            value={member.role}
-                            onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
-                            className="border rounded-lg px-2 py-1 text-[10px] md:text-xs font-semibold bg-white outline-none"
-                          >
-                            <option value="owner">Owner</option>
-                            <option value="admin">Admin</option>
-                            <option value="editor">Editor</option>
-                            <option value="responder">Responder</option>
-                          </select>
-                          <button 
-                            onClick={() => handleDeleteTeamMember(member.id, member.email)}
-                            className="text-red-500 hover:text-red-700 p-1 rounded-lg bg-red-50 transition"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Pending Approval Section */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
-            <div className="px-4 md:px-6 py-3 border-b bg-orange-50/70 flex items-center justify-between">
-              <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
-                <CheckCircle2 size={16} className="mr-2 text-orange-600" /> Pending Ads ({pendingListings.length})
-              </h3>
-            </div>
-            {pendingListings.length === 0 ? (
-              <div className="p-6 text-center text-gray-400 text-xs">No pending ads waiting for review.</div>
-            ) : (
-              <div className="divide-y">
-                {pendingListings.map(item => (
-                  <div key={item.id} className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
-                    <div className="flex items-center space-x-3">
-                      <img src={item.image_url} alt={item.title} className="w-12 h-12 object-cover rounded-lg shrink-0" />
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-xs md:text-sm">{item.title}</h4>
-                        <p className="text-[10px] md:text-xs text-orange-600 font-semibold">Rs. {item.price?.toLocaleString()} · {item.city}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                      {isEditor && (
-                        <button onClick={() => openEditModal(item)} className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1.5 rounded-xl">Edit</button>
-                      )}
-                      <button onClick={() => handleApproveListing(item.id)} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs">✓ Approve</button>
-                      {isOwner && (
-                        <button onClick={(e) => handleDeleteListing(e, item)} className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl">Delete</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </main>
       ) : (
         <main className="max-w-7xl mx-auto px-4 py-4 md:py-6 flex-1 w-full">
-          {/* Slim Banner with Mode Title */}
           <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-4 md:px-6 py-4 mb-6 text-white shadow-md flex items-center justify-between">
             <button 
               onClick={() => setAppMode(null)}
               className="text-[10px] md:text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-2.5 py-1 rounded-xl transition"
             >
-              ← Back
+              ← Back to Login
             </button>
             <h1 className="text-sm md:text-xl font-black tracking-tight uppercase text-center">
               {appMode === 'rental' ? '🏠 Rental Section' : '🛒 Buy & Sell Section'}
@@ -1001,7 +1057,6 @@ export default function App() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar Categories (Collapsible/Horizontal on Mobile) */}
             <aside className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-gray-200/80 p-3 md:p-4 shadow-xs sticky top-20">
                 <h3 className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-wider mb-2 px-1 flex items-center">
@@ -1031,7 +1086,6 @@ export default function App() {
               </div>
             </aside>
 
-            {/* Right Content Listings */}
             <div className="lg:col-span-3">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base md:text-xl font-black text-gray-900">
@@ -1054,6 +1108,7 @@ export default function App() {
                     const canDelete = isOwner || (user && item.user_id === user.id);
                     const isSold = item.status === 'Sold';
                     const isNeg = item.negotiable ?? true;
+                    const itemImgs = getItemImages(item);
                     return (
                       <div 
                         key={item.id} 
@@ -1062,8 +1117,13 @@ export default function App() {
                       >
                         <div>
                           <div className="h-40 md:h-48 bg-gray-100 relative overflow-hidden">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                            <img src={itemImgs[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                             <span className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium">{item.category}</span>
+                            {itemImgs.length > 1 && (
+                              <span className="absolute bottom-2.5 left-2.5 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded font-bold">
+                                📷 {itemImgs.length} Photos
+                              </span>
+                            )}
                             <span className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
                               {isNeg ? 'Negotiable' : 'Fixed'}
                             </span>
@@ -1109,69 +1169,7 @@ export default function App() {
         </main>
       )}
 
-      {/* Mobile Bottom Navigation Bar */}
-      {appMode && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 px-4 py-2 flex items-center justify-around shadow-lg">
-          <button 
-            onClick={() => { setCurrentView('marketplace'); }}
-            className={`flex flex-col items-center text-[10px] font-bold ${currentView === 'marketplace' ? 'text-orange-600' : 'text-gray-500'}`}
-          >
-            <Home size={18} className="mb-0.5" /> Home
-          </button>
-          
-          <button 
-            onClick={() => { setAppMode(null); }}
-            className="flex flex-col items-center text-[10px] font-bold text-gray-500"
-          >
-            <ShoppingBag size={18} className="mb-0.5" /> Switch Mode
-          </button>
-
-          {user && (
-            <button 
-              onClick={() => setCurrentView('my-dashboard')}
-              className={`flex flex-col items-center text-[10px] font-bold ${currentView === 'my-dashboard' ? 'text-orange-600' : 'text-gray-500'}`}
-            >
-              <UserCheck size={18} className="mb-0.5" /> My Ads
-            </button>
-          )}
-
-          {isPrivileged && (
-            <button 
-              onClick={() => {
-                setCurrentView('admin-dashboard');
-                fetchClickLogs();
-                if (isOwner) fetchTeamMembers();
-              }}
-              className={`flex flex-col items-center text-[10px] font-bold relative ${currentView === 'admin-dashboard' ? 'text-orange-600' : 'text-gray-500'}`}
-            >
-              <ShieldAlert size={18} className="mb-0.5" /> Control
-              {pendingListings.length > 0 && (
-                <span className="absolute -top-1 right-2 bg-red-600 text-white text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center">
-                  {pendingListings.length}
-                </span>
-              )}
-            </button>
-          )}
-
-          {user ? (
-            <button 
-              onClick={openCreateModal}
-              className="flex flex-col items-center text-[10px] font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-xl"
-            >
-              <PlusCircle size={18} className="mb-0.5" /> Post Ad
-            </button>
-          ) : (
-            <button 
-              onClick={handleGoogleLogin}
-              className="flex flex-col items-center text-[10px] font-bold text-orange-600"
-            >
-              Sign In
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Item Detail Modal */}
+      {/* Item Detail Modal with Multiple Image Gallery Viewer */}
       {selectedItem && (
         <div 
           onClick={() => setSelectedItem(null)} 
@@ -1187,14 +1185,41 @@ export default function App() {
             >
               <X size={18} />
             </button>
-            <div className="h-52 md:h-60 bg-gray-100 rounded-2xl overflow-hidden mb-3.5 relative">
-              <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
-              {selectedItem.status === 'Sold' && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span className="bg-red-600 text-white font-black text-base px-5 py-1.5 rounded-full uppercase tracking-wider">SOLD</span>
+
+            {/* Main Active Photo */}
+            {(() => {
+              const imgs = getItemImages(selectedItem);
+              return (
+                <div>
+                  <div className="h-52 md:h-64 bg-gray-100 rounded-2xl overflow-hidden mb-3 relative shadow-inner">
+                    <img src={imgs[activeImageIndex] || imgs[0]} alt={selectedItem.title} className="w-full h-full object-cover transition duration-300" />
+                    {selectedItem.status === 'Sold' && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <span className="bg-red-600 text-white font-black text-base px-5 py-1.5 rounded-full uppercase tracking-wider">SOLD</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Thumbnail Row Selector */}
+                  {imgs.length > 1 && (
+                    <div className="flex items-center space-x-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
+                      {imgs.map((imgUrl, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setActiveImageIndex(i)}
+                          className={`w-14 h-14 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                            activeImageIndex === i ? 'border-orange-600 ring-2 ring-orange-400/50' : 'border-gray-200 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <img src={imgUrl} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
+
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] md:text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-lg font-bold">{selectedItem.category}</span>
               <div className="flex items-center space-x-1.5">
@@ -1236,7 +1261,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Post / Edit Ad Modal */}
+      {/* Post / Edit Ad Modal with Multiple Photo Uploader */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-5 md:p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1280,20 +1305,44 @@ export default function App() {
                   </label>
                 </div>
               </div>
+
+              {/* Multiple Photos Upload Input */}
               <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1">Upload Photo</label>
-                <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3 py-2.5 text-xs cursor-pointer hover:bg-gray-50 text-gray-600 transition">
-                  <Upload size={14} className="mr-1.5 text-orange-600" />
-                  <span className="truncate font-medium">{imageFile ? imageFile.name : (editingItem ? 'Keep existing photo or choose new...' : 'Choose file...')}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setImageFile(e.target.files[0])} />
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Upload Photos (Multiple Allowed)</label>
+                <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs cursor-pointer hover:bg-gray-50 text-gray-600 transition">
+                  <Upload size={16} className="mb-1 text-orange-600" />
+                  <span className="font-semibold text-center">
+                    {imageFiles.length > 0 ? `${imageFiles.length} photo(s) selected` : 'Click to select multiple product photos'}
+                  </span>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    className="hidden" 
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setImageFiles(Array.from(e.target.files));
+                      }
+                    }} 
+                  />
                 </label>
+                {imageFiles.length > 0 && (
+                  <div className="flex items-center space-x-2 mt-2 overflow-x-auto pb-1">
+                    {Array.from(imageFiles).map((file, idx) => (
+                      <span key={idx} className="text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-lg truncate max-w-[120px]">
+                        {file.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1">Description</label>
                 <textarea rows="2.5" placeholder="Mention condition, terms..." className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
               </div>
               <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-xs md:text-sm transition shadow-sm">
-                {posting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
+                {posting ? 'Uploading & Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
               </button>
             </form>
           </div>
