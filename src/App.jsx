@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, Calendar } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, Calendar, LogOut } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -108,7 +108,6 @@ export default function App() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      // If mobile browser has captured the prompt event, fire it natively
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
@@ -116,7 +115,6 @@ export default function App() {
         setDeferredPrompt(null);
       }
     } else {
-      // Graceful fallback for Desktop PC or browsers where prompt isn't pre-loaded yet
       alert('To install Kinmel:\n• On Mobile: Tap your browser menu (three dots) and select "Add to Home Screen" or "Install App".\n• On PC/Desktop: Click the install icon in your browser address bar.');
     }
   };
@@ -486,7 +484,6 @@ export default function App() {
   const pendingListings = listings.filter(item => !item.is_approved);
   const myUserListings = listings.filter(item => user && item.user_id === user.id);
 
-  // Filter click logs based on selected date (defaults to today)
   const filteredClicksByDate = clickLogs.filter(log => {
     if (!clickDateFilter) return true;
     if (!log.created_at) return false;
@@ -562,6 +559,14 @@ export default function App() {
                 className="bg-black/30 hover:bg-black/50 text-white text-xs font-bold px-5 py-2.5 rounded-2xl backdrop-blur-md transition"
               >
                 🛡️ Control Center {pendingListings.length > 0 && `(${pendingListings.length})`}
+              </button>
+            )}
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold px-4 py-2.5 rounded-2xl backdrop-blur-md transition flex items-center"
+              >
+                <LogOut size={14} className="mr-1.5" /> Sign Out ({user.email})
               </button>
             )}
           </div>
@@ -663,9 +668,15 @@ export default function App() {
                 >
                   <PlusCircle size={14} className="mr-1" /> Post
                 </button>
-                <button onClick={handleLogout} className="text-xs border border-gray-300 px-2.5 py-2 rounded-xl hover:bg-gray-100 font-medium text-gray-700 hidden lg:inline">
-                  Sign Out
-                </button>
+                {/* Mobile / General User Email & Logout Pill */}
+                <div className="flex items-center bg-gray-100 border border-gray-200 rounded-xl px-2.5 py-1.5 space-x-2">
+                  <span className="text-[10px] font-bold text-gray-700 truncate max-w-[100px] md:max-w-[140px]" title={user.email}>
+                    {user.email}
+                  </span>
+                  <button onClick={handleLogout} className="text-red-600 hover:text-red-700 p-0.5 rounded" title="Sign Out">
+                    <LogOut size={14} />
+                  </button>
+                </div>
               </div>
             ) : (
               <button onClick={handleGoogleLogin} className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm">
@@ -698,12 +709,20 @@ export default function App() {
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">My Posted Ads</h1>
               <p className="text-xs md:text-sm text-gray-500">Manage active listings, review approval, or update product status.</p>
             </div>
-            <button 
-              onClick={() => setCurrentView('marketplace')} 
-              className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50"
-            >
-              ← Back
-            </button>
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={handleLogout} 
+                className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 flex items-center"
+              >
+                <LogOut size={14} className="mr-1" /> Sign Out
+              </button>
+              <button 
+                onClick={() => setCurrentView('marketplace')} 
+                className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50"
+              >
+                ← Back
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
@@ -769,9 +788,14 @@ export default function App() {
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">Control Center ({userRole.toUpperCase()})</h1>
               <p className="text-xs md:text-sm text-gray-500">Approve pending ads and manage platform tools.</p>
             </div>
-            <button onClick={() => setCurrentView('marketplace')} className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50">
-              ← Back
-            </button>
+            <div className="flex items-center space-x-2">
+              <button onClick={handleLogout} className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 flex items-center">
+                <LogOut size={14} className="mr-1" /> Sign Out
+              </button>
+              <button onClick={() => setCurrentView('marketplace')} className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50">
+                ← Back
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
