@@ -579,6 +579,18 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans pb-20 md:pb-0">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50 shadow-xs">
+        {/* Mobile Username Top Banner */}
+        {user && (
+          <div className="bg-orange-50 border-b border-orange-100 px-4 py-1.5 flex items-center justify-between text-xs md:hidden">
+            <span className="font-bold text-orange-800 truncate">
+              Hi, {user.user_metadata?.full_name || user.email?.split('@')[0] || user.email}
+            </span>
+            <span className="text-[10px] text-orange-600 font-semibold bg-orange-100 px-2 py-0.5 rounded-full">
+              {user.email}
+            </span>
+          </div>
+        )}
+
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2 md:space-x-3">
             <a 
@@ -668,15 +680,15 @@ export default function App() {
                 >
                   <PlusCircle size={14} className="mr-1" /> Post
                 </button>
-                {/* Mobile / General User Email & Logout Pill */}
-                <div className="flex items-center bg-gray-100 border border-gray-200 rounded-xl px-2.5 py-1.5 space-x-2">
-                  <span className="text-[10px] font-bold text-gray-700 truncate max-w-[100px] md:max-w-[140px]" title={user.email}>
-                    {user.email}
-                  </span>
-                  <button onClick={handleLogout} className="text-red-600 hover:text-red-700 p-0.5 rounded" title="Sign Out">
-                    <LogOut size={14} />
-                  </button>
-                </div>
+                {/* Sign Out Button placed right beside Post */}
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-2 rounded-xl text-xs font-bold flex items-center transition"
+                  title="Sign Out"
+                >
+                  <LogOut size={14} className="md:mr-1" />
+                  <span className="hidden md:inline">Sign Out</span>
+                </button>
               </div>
             ) : (
               <button onClick={handleGoogleLogin} className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm">
@@ -709,20 +721,12 @@ export default function App() {
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">My Posted Ads</h1>
               <p className="text-xs md:text-sm text-gray-500">Manage active listings, review approval, or update product status.</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={handleLogout} 
-                className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 flex items-center"
-              >
-                <LogOut size={14} className="mr-1" /> Sign Out
-              </button>
-              <button 
-                onClick={() => setCurrentView('marketplace')} 
-                className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50"
-              >
-                ← Back
-              </button>
-            </div>
+            <button 
+              onClick={() => setCurrentView('marketplace')} 
+              className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50"
+            >
+              ← Back
+            </button>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-8">
@@ -788,14 +792,9 @@ export default function App() {
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">Control Center ({userRole.toUpperCase()})</h1>
               <p className="text-xs md:text-sm text-gray-500">Approve pending ads and manage platform tools.</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <button onClick={handleLogout} className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 flex items-center">
-                <LogOut size={14} className="mr-1" /> Sign Out
-              </button>
-              <button onClick={() => setCurrentView('marketplace')} className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50">
-                ← Back
-              </button>
-            </div>
+            <button onClick={() => setCurrentView('marketplace')} className="text-xs bg-white border border-gray-300 px-3 py-2 rounded-xl font-medium hover:bg-gray-50">
+              ← Back
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
