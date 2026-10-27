@@ -14,6 +14,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   // State for date filter input inside Control Center (Defaults to today's date YYYY-MM-DD)
   const [clickDateFilter, setClickDateFilter] = useState(new Date().toISOString().split('T')[0]);
@@ -37,7 +38,9 @@ export default function App() {
   const [newCity, setNewCity] = useState('Dhangadhi');
   const [newPhone, setNewPhone] = useState('');
   const [newNegotiable, setNewNegotiable] = useState(true);
-  const [imageFile, setImageFile] = useState(null);
+  
+  // Multiple Image Files State
+  const [imageFiles, setImageFiles] = useState([]);
   const [posting, setPosting] = useState(false);
 
   // Role Assignment State inside Control Center
@@ -108,7 +111,6 @@ export default function App() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      // If mobile browser has captured the prompt event, fire it natively
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
@@ -116,7 +118,6 @@ export default function App() {
         setDeferredPrompt(null);
       }
     } else {
-      // Graceful fallback for Desktop PC or browsers where prompt isn't pre-loaded yet
       alert('To install Kinmel:\n• On Mobile: Tap your browser menu (three dots) and select "Add to Home Screen" or "Install App".\n• On PC/Desktop: Click the install icon in your browser address bar.');
     }
   };
@@ -210,6 +211,7 @@ export default function App() {
   };
 
   const handleCardClick = async (item) => {
+    setActiveImageIndex(0);
     setSelectedItem(item);
     try {
       await supabase.from('listing_clicks').insert([
@@ -225,6 +227,13 @@ export default function App() {
     }
   };
 
+  // Helper to safely parse image URLs (supports legacy string or new array)
+  const getItemImages = (item) => {
+    if (!item?.image_url) return ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
+    if (Array.isArray(item.image_url)) return item.image_url;
+    return [item.image_url];
+  };
+
   const openEditModal = (item) => {
     setEditingItem(item);
     setNewTitle(item.title || '');
@@ -235,7 +244,7 @@ export default function App() {
     setNewNegotiable(item.negotiable ?? true);
     const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Construction';
     setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Construction');
-    setImageFile(null);
+    setImageFiles([]);
     setIsModalOpen(true);
   };
 
@@ -248,7 +257,7 @@ export default function App() {
     setNewPhone('');
     setNewNegotiable(true);
     setNewCategory('Construction');
-    setImageFile(null);
+    setImageFiles([]);
     setIsModalOpen(true);
   };
 
@@ -258,22 +267,35 @@ export default function App() {
 
     try {
       setPosting(true);
-      let imageUrl = editingItem ? editingItem.image_url : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
+      
+      let imageUrls = [];
+      if (editingItem) {
+        imageUrls = getItemImages(editingItem);
+      }
 
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('listing-images')
-          .upload(fileName, imageFile);
+      if (imageFiles && imageFiles.length > 0) {
+        const uploadPromises = Array.from(imageFiles).map(async (file) => {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Math.random()}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from('listing-images')
+            .upload(fileName, file);
 
-        if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-        const { data: publicURLData } = supabase.storage
-          .from('listing-images')
-          .getPublicUrl(fileName);
+          const { data: publicURLData } = supabase.storage
+            .from('listing-images')
+            .getPublicUrl(fileName);
 
-        imageUrl = publicURLData.publicUrl;
+          return publicURLData.publicUrl;
+        });
+
+        const newUploadedUrls = await Promise.all(uploadPromises);
+        imageUrls = [...imageUrls, ...newUploadedUrls];
+      }
+
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
       }
 
       let finalCategory = newCategory;
@@ -295,7 +317,7 @@ export default function App() {
           city: newCity,
           phone: newPhone,
           negotiable: newNegotiable,
-          image_url: imageUrl
+          image_url: imageUrls
         };
 
         const { error } = await supabase.from('listings').update(updateData).eq('id', editingItem.id);
@@ -310,7 +332,7 @@ export default function App() {
           city: newCity,
           phone: newPhone,
           negotiable: newNegotiable,
-          image_url: imageUrl,
+          image_url: imageUrls,
           user_id: user.id,
           is_approved: isOwnerOrAdmin,
           status: 'Active',
@@ -324,6 +346,7 @@ export default function App() {
 
       setIsModalOpen(false);
       setEditingItem(null);
+      setImageFiles([]);
       fetchListings();
     } catch (err) {
       alert('Error saving listing: ' + err.message);
@@ -717,47 +740,51 @@ export default function App() {
               <div className="p-10 text-center text-gray-400 text-xs md:text-sm">You haven't posted any ads yet.</div>
             ) : (
               <div className="divide-y">
-                {myUserListings.map(item => (
-                  <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
-                    <div className="flex items-center space-x-3">
-                      <img src={item.image_url} alt={item.title} className="w-16 h-16 object-cover rounded-xl border shrink-0" />
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1 flex-wrap gap-y-1">
-                          <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {item.status || 'Active'}
-                          </span>
+                {myUserListings.map(item => {
+                  const itemImgs = getItemImages(item);
+                  return (
+                    <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
+                      <div className="flex items-center space-x-3">
+                        <img src={itemImgs[0]} alt={item.title} className="w-16 h-16 object-cover rounded-xl border shrink-0" />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1 flex-wrap gap-y-1">
+                            <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                              {item.status || 'Active'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {item.is_approved ? <span className="text-green-600 font-semibold">Approved</span> : <span className="text-amber-600 font-semibold">Pending Review</span>}
+                            {itemImgs.length > 1 && <span className="ml-2 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-semibold">{itemImgs.length} Photos</span>}
+                          </p>
                         </div>
-                        <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {item.is_approved ? <span className="text-green-600 font-semibold">Approved</span> : <span className="text-amber-600 font-semibold">Pending Review</span>}
-                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-0 border-gray-100">
+                        <button 
+                          onClick={() => openEditModal(item)}
+                          className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center"
+                        >
+                          <Edit3 size={12} className="mr-1" /> Edit
+                        </button>
+                        <button 
+                          onClick={() => handleToggleStatus(item)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${
+                            item.status === 'Sold' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {item.status === 'Sold' ? 'Active' : 'Mark Sold'}
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteListing(e, item)} 
+                          className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl transition"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-0 border-gray-100">
-                      <button 
-                        onClick={() => openEditModal(item)}
-                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center"
-                      >
-                        <Edit3 size={12} className="mr-1" /> Edit
-                      </button>
-                      <button 
-                        onClick={() => handleToggleStatus(item)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${
-                          item.status === 'Sold' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}
-                      >
-                        {item.status === 'Sold' ? 'Active' : 'Mark Sold'}
-                      </button>
-                      <button 
-                        onClick={(e) => handleDeleteListing(e, item)} 
-                        className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl transition"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -930,26 +957,29 @@ export default function App() {
               <div className="p-6 text-center text-gray-400 text-xs">No pending ads waiting for review.</div>
             ) : (
               <div className="divide-y">
-                {pendingListings.map(item => (
-                  <div key={item.id} className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
-                    <div className="flex items-center space-x-3">
-                      <img src={item.image_url} alt={item.title} className="w-12 h-12 object-cover rounded-lg shrink-0" />
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-xs md:text-sm">{item.title}</h4>
-                        <p className="text-[10px] md:text-xs text-orange-600 font-semibold">Rs. {item.price?.toLocaleString()} · {item.city}</p>
+                {pendingListings.map(item => {
+                  const itemImgs = getItemImages(item);
+                  return (
+                    <div key={item.id} className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-gray-50 transition">
+                      <div className="flex items-center space-x-3">
+                        <img src={itemImgs[0]} alt={item.title} className="w-12 h-12 object-cover rounded-lg shrink-0" />
+                        <div>
+                          <h4 className="font-bold text-gray-900 text-xs md:text-sm">{item.title}</h4>
+                          <p className="text-[10px] md:text-xs text-orange-600 font-semibold">Rs. {item.price?.toLocaleString()} · {item.city}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                        {isEditor && (
+                          <button onClick={() => openEditModal(item)} className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1.5 rounded-xl">Edit</button>
+                        )}
+                        <button onClick={() => handleApproveListing(item.id)} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs">✓ Approve</button>
+                        {isOwner && (
+                          <button onClick={(e) => handleDeleteListing(e, item)} className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl">Delete</button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                      {isEditor && (
-                        <button onClick={() => openEditModal(item)} className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1.5 rounded-xl">Edit</button>
-                      )}
-                      <button onClick={() => handleApproveListing(item.id)} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs">✓ Approve</button>
-                      {isOwner && (
-                        <button onClick={(e) => handleDeleteListing(e, item)} className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-xl">Delete</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1031,6 +1061,7 @@ export default function App() {
                     const canDelete = isOwner || (user && item.user_id === user.id);
                     const isSold = item.status === 'Sold';
                     const isNeg = item.negotiable ?? true;
+                    const itemImgs = getItemImages(item);
                     return (
                       <div 
                         key={item.id} 
@@ -1039,8 +1070,13 @@ export default function App() {
                       >
                         <div>
                           <div className="h-40 md:h-48 bg-gray-100 relative overflow-hidden">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                            <img src={itemImgs[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                             <span className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium">{item.category}</span>
+                            {itemImgs.length > 1 && (
+                              <span className="absolute bottom-2.5 left-2.5 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded font-bold">
+                                📷 {itemImgs.length} Photos
+                              </span>
+                            )}
                             <span className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
                               {isNeg ? 'Negotiable' : 'Fixed'}
                             </span>
@@ -1148,7 +1184,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Item Detail Modal */}
+      {/* Item Detail Modal with Multiple Image Support */}
       {selectedItem && (
         <div 
           onClick={() => setSelectedItem(null)} 
@@ -1164,14 +1200,40 @@ export default function App() {
             >
               <X size={18} />
             </button>
-            <div className="h-52 md:h-60 bg-gray-100 rounded-2xl overflow-hidden mb-3.5 relative">
-              <img src={selectedItem.image_url} alt={selectedItem.title} className="w-full h-full object-cover" />
-              {selectedItem.status === 'Sold' && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span className="bg-red-600 text-white font-black text-base px-5 py-1.5 rounded-full uppercase tracking-wider">SOLD</span>
+
+            {/* Active Image & Gallery Thumbnails */}
+            {(() => {
+              const itemImgs = getItemImages(selectedItem);
+              return (
+                <div>
+                  <div className="h-52 md:h-60 bg-gray-100 rounded-2xl overflow-hidden mb-3 relative">
+                    <img src={itemImgs[activeImageIndex] || itemImgs[0]} alt={selectedItem.title} className="w-full h-full object-cover" />
+                    {selectedItem.status === 'Sold' && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <span className="bg-red-600 text-white font-black text-base px-5 py-1.5 rounded-full uppercase tracking-wider">SOLD</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {itemImgs.length > 1 && (
+                    <div className="flex items-center space-x-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
+                      {itemImgs.map((imgUrl, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveImageIndex(idx)}
+                          className={`w-14 h-14 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                            activeImageIndex === idx ? 'border-orange-600 ring-2 ring-orange-400/50' : 'border-gray-200 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
+
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] md:text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-lg font-bold">{selectedItem.category}</span>
               <div className="flex items-center space-x-1.5">
@@ -1213,7 +1275,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Post / Edit Ad Modal */}
+      {/* Post / Edit Ad Modal with Multiple File Uploads */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-5 md:p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1258,19 +1320,40 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1">Upload Photo</label>
-                <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3 py-2.5 text-xs cursor-pointer hover:bg-gray-50 text-gray-600 transition">
-                  <Upload size={14} className="mr-1.5 text-orange-600" />
-                  <span className="truncate font-medium">{imageFile ? imageFile.name : (editingItem ? 'Keep existing photo or choose new...' : 'Choose file...')}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setImageFile(e.target.files[0])} />
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Upload Photos (Multiple Allowed)</label>
+                <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs cursor-pointer hover:bg-gray-50 text-gray-600 transition">
+                  <Upload size={16} className="mb-1 text-orange-600" />
+                  <span className="font-semibold text-center">
+                    {imageFiles.length > 0 ? `${imageFiles.length} photo(s) selected` : (editingItem ? 'Keep existing photos or select new ones...' : 'Click to select multiple product photos')}
+                  </span>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    className="hidden" 
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setImageFiles(Array.from(e.target.files));
+                      }
+                    }} 
+                  />
                 </label>
+                {imageFiles.length > 0 && (
+                  <div className="flex items-center space-x-2 mt-2 overflow-x-auto pb-1">
+                    {imageFiles.map((file, idx) => (
+                      <span key={idx} className="text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-lg truncate max-w-[120px]">
+                        {file.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1">Description</label>
                 <textarea rows="2.5" placeholder="Mention condition, terms..." className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
               </div>
               <button type="submit" disabled={posting} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-xs md:text-sm transition shadow-sm">
-                {posting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
+                {posting ? 'Uploading & Saving...' : (editingItem ? 'Save Changes' : 'Publish Listing')}
               </button>
             </form>
           </div>
