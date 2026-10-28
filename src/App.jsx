@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, Calendar } from 'lucide-react';
+import { Search, MapPin, PlusCircle, Trash2, X, Upload, MessageCircle, Phone, ShieldAlert, Users, MousePointerClick, LayoutGrid, ArrowRight, CheckCircle2, UserCheck, Edit3, Download, Home, ShoppingBag, Calendar, LogOut } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -232,7 +232,6 @@ export default function App() {
     }
   };
 
-  // Helper to safely parse image URLs (supports legacy string or new array)
   const getItemImages = (item) => {
     if (!item?.image_url) return ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
     if (Array.isArray(item.image_url)) return item.image_url;
@@ -523,16 +522,13 @@ export default function App() {
                           item.city?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   }).sort((a, b) => {
-    // 1. Urgent items globally sorted to the very top
     if (a.is_urgent && !b.is_urgent) return -1;
     if (!a.is_urgent && b.is_urgent) return 1;
 
-    // 2. Sort by custom display_order (ascending: lower numbers appear first)
     const orderA = a.display_order ?? 0;
     const orderB = b.display_order ?? 0;
     if (orderA !== orderB) return orderA - orderB;
 
-    // 3. Fallback to newest created date
     return new Date(b.created_at) - new Date(a.created_at);
   });
 
@@ -666,25 +662,34 @@ export default function App() {
       <header className="bg-white border-b sticky top-0 z-50 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2 md:space-x-3">
-            <a 
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setAppMode(null);
-                setSearchTerm('');
-                setSelectedCategory('All');
-                setCurrentView('marketplace');
-              }}
-              className="text-xl md:text-2xl font-black text-orange-600 tracking-tight cursor-pointer"
-            >
-              Kinmel
-            </a>
-            <span className="text-[10px] md:text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">Nepal</span>
+            <div>
+              {user && (
+                <div className="text-[10px] md:text-xs font-bold text-orange-600 leading-none mb-0.5">
+                  Hello! {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                </div>
+              )}
+              <div className="flex items-center space-x-2">
+                <a 
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setAppMode(null);
+                    setSearchTerm('');
+                    setSelectedCategory('All');
+                    setCurrentView('marketplace');
+                  }}
+                  className="text-xl md:text-2xl font-black text-orange-600 tracking-tight cursor-pointer leading-tight"
+                >
+                  Kinmel
+                </a>
+                <span className="text-[10px] md:text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">Nepal</span>
+              </div>
+            </div>
             
             {appMode && (
               <button 
                 onClick={() => setAppMode(appMode === 'rental' ? 'buysell' : 'rental')}
-                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-2.5 py-1 rounded-xl font-bold transition flex items-center"
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-2.5 py-1 rounded-xl font-bold transition flex items-center ml-2"
               >
                 <span className="text-orange-600 uppercase text-[10px] md:text-xs">{appMode === 'rental' ? '🏠 Rental' : '🛒 Buy/Sell'} (Switch)</span>
               </button>
@@ -753,8 +758,12 @@ export default function App() {
                 >
                   <PlusCircle size={14} className="mr-1" /> Post
                 </button>
-                <button onClick={handleLogout} className="text-xs border border-gray-300 px-2.5 py-2 rounded-xl hover:bg-gray-100 font-medium text-gray-700 hidden lg:inline">
-                  Sign Out
+                <button 
+                  onClick={handleLogout} 
+                  title="Sign Out"
+                  className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-xl transition flex items-center justify-center"
+                >
+                  <LogOut size={18} />
                 </button>
               </div>
             ) : (
@@ -1047,26 +1056,6 @@ export default function App() {
         </main>
       ) : (
         <main className="max-w-7xl mx-auto px-4 py-4 md:py-6 flex-1 w-full">
-          <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-4 md:px-6 py-4 mb-6 text-white shadow-md flex items-center justify-between">
-            <button 
-              onClick={() => setAppMode(null)}
-              className="text-[10px] md:text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-2.5 py-1 rounded-xl transition"
-            >
-              ← Back
-            </button>
-            <h1 className="text-sm md:text-xl font-black tracking-tight uppercase text-center">
-              {appMode === 'rental' ? '🏠 Rental Section' : '🛒 Buy & Sell Section'}
-            </h1>
-            {user ? (
-              <button 
-                onClick={openCreateModal}
-                className="bg-white text-orange-600 hover:bg-orange-50 font-bold px-3 py-1.5 rounded-xl text-[10px] md:text-xs shadow-sm transition whitespace-nowrap"
-              >
-                + Post
-              </button>
-            ) : <div></div>}
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <aside className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-gray-200/80 p-3 md:p-4 shadow-xs sticky top-20">
