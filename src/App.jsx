@@ -365,7 +365,8 @@ export default function App() {
         negotiable: newNegotiable,
         image_url: imageUrls,
         is_urgent: newUrgent,
-        display_order: parseInt(newOrder) || 0
+        display_order: parseInt(newOrder) || 0,
+        user_email: user?.email || 'Unknown User'
       };
 
       // Handle offline submission queue
@@ -1081,6 +1082,9 @@ export default function App() {
                         <div>
                           <h4 className="font-bold text-gray-900 text-xs md:text-sm">{item.title}</h4>
                           <p className="text-[10px] md:text-xs text-orange-600 font-semibold">Rs. {item.price?.toLocaleString()} · {item.city}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            👤 Requested by: <span className="font-bold text-gray-800">{item.user_email || item.user_id || 'Unknown User'}</span>
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
