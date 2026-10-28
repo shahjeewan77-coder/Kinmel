@@ -80,6 +80,28 @@ export default function App() {
       console.log('App was successfully installed');
     });
 
+    // Automatically sync offline queued listings when reconnected
+    const handleOnlineSync = async () => {
+      if (navigator.onLine) {
+        const pendingQueue = JSON.parse(localStorage.getItem('offline_ad_queue') || '[]');
+        if (pendingQueue.length > 0) {
+          console.log('Back online! Syncing pending offline posts...');
+          for (const adPayload of pendingQueue) {
+            try {
+              await supabase.from('listings').insert([adPayload]);
+            } catch (err) {
+              console.error('Failed syncing offline ad:', err);
+            }
+          }
+          localStorage.removeItem('offline_ad_queue');
+          alert('Your offline posted ads have been synced successfully!');
+          fetchListings();
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnlineSync);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -110,6 +132,7 @@ export default function App() {
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('online', handleOnlineSync);
       subscription.unsubscribe();
     };
   }, []);
@@ -345,12 +368,34 @@ export default function App() {
         display_order: parseInt(newOrder) || 0
       };
 
+      // Handle offline submission queue
+      if (!navigator.onLine) {
+        const offlineQueue = JSON.parse(localStorage.getItem('offline_ad_queue') || '[]');
+        offlineQueue.push({
+          ...payloadData,
+          user_id: user ? user.id : null,
+          is_approved: isOwnerOrAdmin,
+          status: 'Active',
+          sold_at: null,
+          created_at: new Date().toISOString()
+        });
+        localStorage.setItem('offline_ad_queue', JSON.stringify(offlineQueue));
+        
+        alert('You are currently offline. Your ad has been saved locally and will automatically sync once you reconnect!');
+        setIsModalOpen(false);
+        setEditingItem(null);
+        setImageFiles([]);
+        setExistingImages([]);
+        setPosting(false);
+        return;
+      }
+
       if (editingItem) {
         const { error } = await supabase.from('listings').update(payloadData).eq('id', editingItem.id);
         if (error) throw error;
         alert('Listing updated successfully!');
       } else {
-        payloadData.user_id = user.id;
+        payloadData.user_id = user?.id;
         payloadData.is_approved = isOwnerOrAdmin;
         payloadData.status = 'Active';
         payloadData.sold_at = null;
