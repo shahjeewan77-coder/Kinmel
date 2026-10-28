@@ -39,8 +39,9 @@ export default function App() {
   const [newPhone, setNewPhone] = useState('');
   const [newNegotiable, setNewNegotiable] = useState(true);
   
-  // Multiple Image Files State
+  // Multiple Image Files & Existing Images State
   const [imageFiles, setImageFiles] = useState([]);
+  const [existingImages, setExistingImages] = useState([]);
   const [posting, setPosting] = useState(false);
 
   // Role Assignment State inside Control Center
@@ -231,7 +232,6 @@ export default function App() {
   const getItemImages = (item) => {
     if (!item?.image_url) return ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
     if (Array.isArray(item.image_url)) return item.image_url;
-    // Handle comma-separated strings or plain string URLs
     if (typeof item.image_url === 'string') {
       try {
         const parsed = JSON.parse(item.image_url);
@@ -253,6 +253,9 @@ export default function App() {
     setNewNegotiable(item.negotiable ?? true);
     const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Construction';
     setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Construction');
+    
+    // Load existing images and reset new uploads
+    setExistingImages(getItemImages(item));
     setImageFiles([]);
     setIsModalOpen(true);
   };
@@ -266,8 +269,17 @@ export default function App() {
     setNewPhone('');
     setNewNegotiable(true);
     setNewCategory('Construction');
+    setExistingImages([]);
     setImageFiles([]);
     setIsModalOpen(true);
+  };
+
+  const handleRemoveExistingImage = (indexToRemove) => {
+    setExistingImages(existingImages.filter((_, index) => index !== indexToRemove));
+  };
+
+  const handleRemoveNewFile = (indexToRemove) => {
+    setImageFiles(imageFiles.filter((_, index) => index !== indexToRemove));
   };
 
   const handleSaveListing = async (e) => {
@@ -277,10 +289,7 @@ export default function App() {
     try {
       setPosting(true);
       
-      let imageUrls = [];
-      if (editingItem) {
-        imageUrls = getItemImages(editingItem);
-      }
+      let imageUrls = [...existingImages]; // Keep remaining existing images
 
       if (imageFiles && imageFiles.length > 0) {
         const uploadPromises = Array.from(imageFiles).map(async (file) => {
@@ -356,6 +365,7 @@ export default function App() {
       setIsModalOpen(false);
       setEditingItem(null);
       setImageFiles([]);
+      setExistingImages([]);
       fetchListings();
     } catch (err) {
       alert('Error saving listing: ' + err.message);
@@ -1311,7 +1321,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Post / Edit Ad Modal with Multiple File Uploads */}
+      {/* Post / Edit Ad Modal with Existing & New Photo Management */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-5 md:p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1355,13 +1365,36 @@ export default function App() {
                   </label>
                 </div>
               </div>
+              
+              {/* Photo Management Section */}
               <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1">Upload Photos (Multiple Allowed)</label>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Manage Photos</label>
+                
+                {/* Existing Photos Preview & Delete Option */}
+                {existingImages.length > 0 && (
+                  <div className="mb-2.5">
+                    <span className="text-[10px] text-gray-500 font-semibold block mb-1">Existing Photos (Click × to remove):</span>
+                    <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+                      {existingImages.map((url, idx) => (
+                        <div key={idx} className="relative w-14 h-14 rounded-xl overflow-hidden border shrink-0 bg-gray-100 shadow-xs">
+                          <img src={url} alt="Existing" className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => handleRemoveExistingImage(idx)}
+                            className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] hover:bg-red-700 shadow"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload New Photos Button */}
                 <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs cursor-pointer hover:bg-gray-50 text-gray-600 transition">
                   <Upload size={16} className="mb-1 text-orange-600" />
-                  <span className="font-semibold text-center">
-                    {imageFiles.length > 0 ? `${imageFiles.length} photo(s) selected` : (editingItem ? 'Keep existing photos or select new ones...' : 'Click to select multiple product photos')}
-                  </span>
+                  <span className="font-semibold text-center">Click to add new photos</span>
                   <input 
                     type="file" 
                     accept="image/*" 
@@ -1369,21 +1402,34 @@ export default function App() {
                     className="hidden" 
                     onChange={(e) => {
                       if (e.target.files) {
-                        setImageFiles(Array.from(e.target.files));
+                        setImageFiles([...imageFiles, ...Array.from(e.target.files)]);
                       }
                     }} 
                   />
                 </label>
+
+                {/* Newly Selected Files Preview & Remove */}
                 {imageFiles.length > 0 && (
-                  <div className="flex items-center space-x-2 mt-2 overflow-x-auto pb-1">
-                    {imageFiles.map((file, idx) => (
-                      <span key={idx} className="text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-lg truncate max-w-[120px]">
-                        {file.name}
-                      </span>
-                    ))}
+                  <div className="mt-2">
+                    <span className="text-[10px] text-gray-500 font-semibold block mb-1">New Uploads:</span>
+                    <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+                      {imageFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center bg-orange-50 text-orange-700 border border-orange-200 px-2 py-1 rounded-lg text-[10px] shrink-0">
+                          <span className="truncate max-w-[100px] mr-1">{file.name}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveNewFile(idx)}
+                            className="text-red-600 hover:text-red-800 font-bold ml-1"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1">Description</label>
                 <textarea rows="2.5" placeholder="Mention condition, terms..." className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newDescription} onChange={(e) => setNewDescription(e.target.value)}></textarea>
