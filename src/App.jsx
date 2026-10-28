@@ -747,7 +747,6 @@ export default function App() {
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    changeAppMode(null);
                     setSearchTerm('');
                     setSelectedCategory('All');
                     setCurrentView('marketplace');
@@ -1259,7 +1258,7 @@ export default function App() {
           </button>
           
           <button 
-            onClick={() => { changeAppMode(null); }}
+            onClick={() => { changeAppMode(appMode === 'rental' ? 'buysell' : 'rental'); }}
             className="flex flex-col items-center text-[10px] font-bold text-gray-500"
           >
             <ShoppingBag size={18} className="mb-0.5" /> Switch Mode
