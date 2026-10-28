@@ -10,7 +10,23 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const [appMode, setAppMode] = useState(null);
+  // Load appMode with a 5-minute inactivity check using sessionStorage
+  const [appMode, setAppMode] = useState(() => {
+    const savedMode = sessionStorage.getItem('kinmel_app_mode');
+    const savedTime = sessionStorage.getItem('kinmel_mode_timestamp');
+    
+    if (savedMode && savedTime) {
+      const minutesElapsed = (Date.now() - parseInt(savedTime)) / (1000 * 60);
+      if (minutesElapsed > 5) {
+        sessionStorage.removeItem('kinmel_app_mode');
+        sessionStorage.removeItem('kinmel_mode_timestamp');
+        return null;
+      }
+      return savedMode;
+    }
+    return null;
+  });
+
   const [currentView, setCurrentView] = useState('marketplace'); // 'marketplace', 'admin-dashboard', 'my-dashboard'
   const [clickLogs, setClickLogs] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -54,6 +70,18 @@ export default function App() {
   const [updatingRole, setUpdatingRole] = useState(false);
 
   const categories = ['Construction', 'Vehicles', 'Real Estate', 'Mobile Phones', 'Computers', 'Electronics', 'Home & Furniture', 'Fashion', 'Jobs'];
+
+  // Helper function to update appMode and refresh activity timestamp
+  const changeAppMode = (mode) => {
+    setAppMode(mode);
+    if (mode) {
+      sessionStorage.setItem('kinmel_app_mode', mode);
+      sessionStorage.setItem('kinmel_mode_timestamp', Date.now().toString());
+    } else {
+      sessionStorage.removeItem('kinmel_app_mode');
+      sessionStorage.removeItem('kinmel_mode_timestamp');
+    }
+  };
 
   // Register Service Worker & Handle Install Prompt safely on mount
   useEffect(() => {
@@ -235,7 +263,7 @@ export default function App() {
     await supabase.auth.signOut();
     setUserRole('user');
     setCurrentView('marketplace');
-    setAppMode(null);
+    changeAppMode(null);
   };
 
   const handleCardClick = async (item) => {
@@ -652,7 +680,7 @@ export default function App() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-2xl mx-auto px-2">
             <div 
-              onClick={() => { setAppMode('rental'); setSelectedCategory('All'); }}
+              onClick={() => { changeAppMode('rental'); setSelectedCategory('All'); }}
               className="bg-white text-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl hover:scale-102 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-amber-400"
             >
               <div className="w-14 h-14 md:w-16 md:h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-black mb-3 group-hover:bg-orange-600 group-hover:text-white transition">
@@ -666,7 +694,7 @@ export default function App() {
             </div>
 
             <div 
-              onClick={() => { setAppMode('buysell'); setSelectedCategory('All'); }}
+              onClick={() => { changeAppMode('buysell'); setSelectedCategory('All'); }}
               className="bg-white text-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl hover:scale-102 transition cursor-pointer flex flex-col items-center text-center group border-4 border-transparent hover:border-orange-400"
             >
               <div className="w-14 h-14 md:w-16 md:h-16 bg-orange-100 text-orange-700 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-black mb-3 group-hover:bg-orange-600 group-hover:text-white transition">
@@ -719,7 +747,7 @@ export default function App() {
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    setAppMode(null);
+                    changeAppMode(null);
                     setSearchTerm('');
                     setSelectedCategory('All');
                     setCurrentView('marketplace');
@@ -734,7 +762,7 @@ export default function App() {
             
             {appMode && (
               <button 
-                onClick={() => setAppMode(appMode === 'rental' ? 'buysell' : 'rental')}
+                onClick={() => changeAppMode(appMode === 'rental' ? 'buysell' : 'rental')}
                 className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-2.5 py-1 rounded-xl font-bold transition flex items-center ml-2"
               >
                 <span className="text-orange-600 uppercase text-[10px] md:text-xs">{appMode === 'rental' ? '🏠 Rental' : '🛒 Buy/Sell'} (Switch)</span>
@@ -1231,7 +1259,7 @@ export default function App() {
           </button>
           
           <button 
-            onClick={() => { setAppMode(null); }}
+            onClick={() => { changeAppMode(null); }}
             className="flex flex-col items-center text-[10px] font-bold text-gray-500"
           >
             <ShoppingBag size={18} className="mb-0.5" /> Switch Mode
