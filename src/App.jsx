@@ -10,7 +10,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  // Load appMode with a 5-minute inactivity check using sessionStorage
+  // Load appMode with a strict 5-minute inactivity check using sessionStorage
   const [appMode, setAppMode] = useState(() => {
     const savedMode = sessionStorage.getItem('kinmel_app_mode');
     const savedTime = sessionStorage.getItem('kinmel_mode_timestamp');
@@ -750,7 +750,9 @@ export default function App() {
                     setSearchTerm('');
                     setSelectedCategory('All');
                     setCurrentView('marketplace');
+                    fetchListings();
                   }}
+                  title="Refresh and bring back to all"
                   className="text-xl md:text-2xl font-black text-orange-600 tracking-tight cursor-pointer leading-tight"
                 >
                   Kinmel
