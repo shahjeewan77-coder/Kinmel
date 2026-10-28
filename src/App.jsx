@@ -231,6 +231,15 @@ export default function App() {
   const getItemImages = (item) => {
     if (!item?.image_url) return ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
     if (Array.isArray(item.image_url)) return item.image_url;
+    // Handle comma-separated strings or plain string URLs
+    if (typeof item.image_url === 'string') {
+      try {
+        const parsed = JSON.parse(item.image_url);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return item.image_url.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
     return [item.image_url];
   };
 
@@ -517,42 +526,40 @@ export default function App() {
     return logDate === clickDateFilter;
   });
 
-  // Reusable Auto-sliding Image Carousel Component with Click-to-Next functionality
-  const ImageSlider = ({ images, heightClass = "h-40 md:h-48", onClick, showBadge = true }) => {
+  // Dedicated Robust Image Slider Component
+  const ImageSlider = ({ images, heightClass = "h-40 md:h-48", onCardClick }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
+    const validImages = images && images.length > 0 ? images : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
 
     useEffect(() => {
-      if (!images || images.length <= 1) return;
+      if (validImages.length <= 1) return;
       const interval = setInterval(() => {
-        setCurrentIndex((prev) => (prev + 1) % images.length);
+        setCurrentIndex((prev) => (prev + 1) % validImages.length);
       }, 4000);
       return () => clearInterval(interval);
-    }, [images]);
+    }, [validImages.length]);
 
-    const handleContainerClick = (e) => {
+    const handleBoxClick = (e) => {
       e.stopPropagation();
-      if (images && images.length > 1) {
-        setCurrentIndex((prev) => (prev + 1) % images.length);
+      if (validImages.length > 1) {
+        setCurrentIndex((prev) => (prev + 1) % validImages.length);
       }
-      if (onClick) onClick();
+      if (onCardClick) onCardClick();
     };
-
-    const currentImg = images && images.length > 0 ? images[currentIndex] : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
 
     return (
       <div 
-        onClick={handleContainerClick}
+        onClick={handleBoxClick}
         className={`relative ${heightClass} bg-gray-100 overflow-hidden cursor-pointer group`}
       >
         <img 
-          src={currentImg} 
+          src={validImages[currentIndex]} 
           alt="Listing slide" 
-          className="w-full h-full object-cover transition-opacity duration-500 ease-in-out" 
+          className="w-full h-full object-cover transition-opacity duration-300" 
         />
-        
-        {showBadge && images && images.length > 1 && (
-          <div className="absolute bottom-2.5 right-2.5 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full font-bold opacity-80 group-hover:opacity-100 transition">
-            📷 {currentIndex + 1}/{images.length} (Click for Next)
+        {validImages.length > 1 && (
+          <div className="absolute bottom-2 right-2 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-full font-bold opacity-80 group-hover:opacity-100 transition shadow">
+            📷 {currentIndex + 1}/{validImages.length} (Click for Next)
           </div>
         )}
       </div>
@@ -1111,12 +1118,12 @@ export default function App() {
                         className={`bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group ${isSold ? 'opacity-80' : ''}`}
                       >
                         <div>
-                          {/* Reusable Image Slider Carousel for Item Cards */}
+                          {/* Image Carousel Component for Cards */}
                           <div className="relative">
                             <ImageSlider 
                               images={itemImgs} 
                               heightClass="h-40 md:h-48" 
-                              onClick={() => handleCardClick(item)} 
+                              onCardClick={() => handleCardClick(item)} 
                             />
                             <span className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium z-10">{item.category}</span>
                             <span className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm z-10 ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
@@ -1243,7 +1250,7 @@ export default function App() {
               <X size={18} />
             </button>
 
-            {/* Active Image & Gallery Thumbnails using ImageSlider */}
+            {/* Active Image Carousel inside Modal */}
             {(() => {
               const itemImgs = getItemImages(selectedItem);
               return (
@@ -1321,7 +1328,7 @@ export default function App() {
                   <input type="number" required placeholder="e.g. 5000" className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Category</label>
+                  <label className="label block text-[11px] font-bold text-gray-600 mb-1">Category</label>
                   <select className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
