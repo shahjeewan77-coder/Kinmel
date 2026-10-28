@@ -517,6 +517,48 @@ export default function App() {
     return logDate === clickDateFilter;
   });
 
+  // Reusable Auto-sliding Image Carousel Component with Click-to-Next functionality
+  const ImageSlider = ({ images, heightClass = "h-40 md:h-48", onClick, showBadge = true }) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+      if (!images || images.length <= 1) return;
+      const interval = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % images.length);
+      }, 4000);
+      return () => clearInterval(interval);
+    }, [images]);
+
+    const handleContainerClick = (e) => {
+      e.stopPropagation();
+      if (images && images.length > 1) {
+        setCurrentIndex((prev) => (prev + 1) % images.length);
+      }
+      if (onClick) onClick();
+    };
+
+    const currentImg = images && images.length > 0 ? images[currentIndex] : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30';
+
+    return (
+      <div 
+        onClick={handleContainerClick}
+        className={`relative ${heightClass} bg-gray-100 overflow-hidden cursor-pointer group`}
+      >
+        <img 
+          src={currentImg} 
+          alt="Listing slide" 
+          className="w-full h-full object-cover transition-opacity duration-500 ease-in-out" 
+        />
+        
+        {showBadge && images && images.length > 1 && (
+          <div className="absolute bottom-2.5 right-2.5 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full font-bold opacity-80 group-hover:opacity-100 transition">
+            📷 {currentIndex + 1}/{images.length} (Click for Next)
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (!appMode && currentView === 'marketplace') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 flex flex-col items-center justify-center p-4 font-sans text-white pb-20 md:pb-4">
@@ -1069,19 +1111,19 @@ export default function App() {
                         className={`bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group ${isSold ? 'opacity-80' : ''}`}
                       >
                         <div>
-                          <div className="h-40 md:h-48 bg-gray-100 relative overflow-hidden">
-                            <img src={itemImgs[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                            <span className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium">{item.category}</span>
-                            {itemImgs.length > 1 && (
-                              <span className="absolute bottom-2.5 left-2.5 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded font-bold">
-                                📷 {itemImgs.length} Photos
-                              </span>
-                            )}
-                            <span className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
+                          {/* Reusable Image Slider Carousel for Item Cards */}
+                          <div className="relative">
+                            <ImageSlider 
+                              images={itemImgs} 
+                              heightClass="h-40 md:h-48" 
+                              onClick={() => handleCardClick(item)} 
+                            />
+                            <span className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium z-10">{item.category}</span>
+                            <span className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm z-10 ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
                               {isNeg ? 'Negotiable' : 'Fixed'}
                             </span>
                             {isSold && (
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20 pointer-events-none">
                                 <span className="bg-red-600 text-white font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">SOLD</span>
                               </div>
                             )}
@@ -1201,35 +1243,22 @@ export default function App() {
               <X size={18} />
             </button>
 
-            {/* Active Image & Gallery Thumbnails */}
+            {/* Active Image & Gallery Thumbnails using ImageSlider */}
             {(() => {
               const itemImgs = getItemImages(selectedItem);
               return (
-                <div>
-                  <div className="h-52 md:h-60 bg-gray-100 rounded-2xl overflow-hidden mb-3 relative">
-                    <img src={itemImgs[activeImageIndex] || itemImgs[0]} alt={selectedItem.title} className="w-full h-full object-cover" />
+                <div className="mb-3">
+                  <div className="rounded-2xl overflow-hidden relative shadow-inner">
+                    <ImageSlider 
+                      images={itemImgs} 
+                      heightClass="h-52 md:h-60" 
+                    />
                     {selectedItem.status === 'Sold' && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none z-20">
                         <span className="bg-red-600 text-white font-black text-base px-5 py-1.5 rounded-full uppercase tracking-wider">SOLD</span>
                       </div>
                     )}
                   </div>
-
-                  {itemImgs.length > 1 && (
-                    <div className="flex items-center space-x-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
-                      {itemImgs.map((imgUrl, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveImageIndex(idx)}
-                          className={`w-14 h-14 rounded-xl overflow-hidden border-2 shrink-0 transition ${
-                            activeImageIndex === idx ? 'border-orange-600 ring-2 ring-orange-400/50' : 'border-gray-200 opacity-70 hover:opacity-100'
-                          }`}
-                        >
-                          <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })()}
