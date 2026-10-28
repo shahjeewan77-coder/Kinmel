@@ -39,6 +39,10 @@ export default function App() {
   const [newPhone, setNewPhone] = useState('');
   const [newNegotiable, setNewNegotiable] = useState(true);
   
+  // Urgent & Custom Order States
+  const [newUrgent, setNewUrgent] = useState(false);
+  const [newOrder, setNewOrder] = useState('0');
+  
   // Multiple Image Files & Existing Images State
   const [imageFiles, setImageFiles] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
@@ -251,10 +255,11 @@ export default function App() {
     setNewCity(item.city || 'Dhangadhi');
     setNewPhone(item.phone || '');
     setNewNegotiable(item.negotiable ?? true);
+    setNewUrgent(item.is_urgent ?? false);
+    setNewOrder(item.display_order ?? 0);
     const cleanCat = item.category?.replace(/^(Rental: |Buy\/Sell: )/, '') || 'Construction';
     setNewCategory(categories.includes(cleanCat) ? cleanCat : 'Construction');
     
-    // Load existing images and reset new uploads
     setExistingImages(getItemImages(item));
     setImageFiles([]);
     setIsModalOpen(true);
@@ -268,6 +273,8 @@ export default function App() {
     setNewCity('Dhangadhi');
     setNewPhone('');
     setNewNegotiable(true);
+    setNewUrgent(false);
+    setNewOrder('0');
     setNewCategory('Construction');
     setExistingImages([]);
     setImageFiles([]);
@@ -289,7 +296,7 @@ export default function App() {
     try {
       setPosting(true);
       
-      let imageUrls = [...existingImages]; // Keep remaining existing images
+      let imageUrls = [...existingImages];
 
       if (imageFiles && imageFiles.length > 0) {
         const uploadPromises = Array.from(imageFiles).map(async (file) => {
@@ -326,38 +333,30 @@ export default function App() {
 
       const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin' || userRole === 'editor';
 
-      if (editingItem) {
-        const updateData = {
-          title: newTitle,
-          description: newDescription,
-          price: parseFloat(newPrice),
-          category: finalCategory,
-          city: newCity,
-          phone: newPhone,
-          negotiable: newNegotiable,
-          image_url: imageUrls
-        };
+      const payloadData = {
+        title: newTitle,
+        description: newDescription,
+        price: parseFloat(newPrice),
+        category: finalCategory,
+        city: newCity,
+        phone: newPhone,
+        negotiable: newNegotiable,
+        image_url: imageUrls,
+        is_urgent: newUrgent,
+        display_order: parseInt(newOrder) || 0
+      };
 
-        const { error } = await supabase.from('listings').update(updateData).eq('id', editingItem.id);
+      if (editingItem) {
+        const { error } = await supabase.from('listings').update(payloadData).eq('id', editingItem.id);
         if (error) throw error;
         alert('Listing updated successfully!');
       } else {
-        const insertData = {
-          title: newTitle,
-          description: newDescription,
-          price: parseFloat(newPrice),
-          category: finalCategory,
-          city: newCity,
-          phone: newPhone,
-          negotiable: newNegotiable,
-          image_url: imageUrls,
-          user_id: user.id,
-          is_approved: isOwnerOrAdmin,
-          status: 'Active',
-          sold_at: null
-        };
+        payloadData.user_id = user.id;
+        payloadData.is_approved = isOwnerOrAdmin;
+        payloadData.status = 'Active';
+        payloadData.sold_at = null;
 
-        const { error } = await supabase.from('listings').insert([insertData]);
+        const { error } = await supabase.from('listings').insert([payloadData]);
         if (error) throw error;
         alert(isOwnerOrAdmin ? 'Listing published successfully!' : 'Ad submitted successfully! It will appear publicly after review.');
       }
@@ -523,12 +522,23 @@ export default function App() {
     const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           item.city?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
+  }).sort((a, b) => {
+    // 1. Urgent items globally sorted to the very top
+    if (a.is_urgent && !b.is_urgent) return -1;
+    if (!a.is_urgent && b.is_urgent) return 1;
+
+    // 2. Sort by custom display_order (ascending: lower numbers appear first)
+    const orderA = a.display_order ?? 0;
+    const orderB = b.display_order ?? 0;
+    if (orderA !== orderB) return orderA - orderB;
+
+    // 3. Fallback to newest created date
+    return new Date(b.created_at) - new Date(a.created_at);
   });
 
   const pendingListings = listings.filter(item => !item.is_approved);
   const myUserListings = listings.filter(item => user && item.user_id === user.id);
 
-  // Filter click logs based on selected date (defaults to today)
   const filteredClicksByDate = clickLogs.filter(log => {
     if (!clickDateFilter) return true;
     if (!log.created_at) return false;
@@ -536,7 +546,6 @@ export default function App() {
     return logDate === clickDateFilter;
   });
 
-  // Dedicated Robust Image Slider Component
   const ImageSlider = ({ images, heightClass = "h-40 md:h-48", onCardClick }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const validImages = images && images.length > 0 ? images : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30'];
@@ -654,7 +663,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans pb-20 md:pb-0">
-      {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2 md:space-x-3">
@@ -757,7 +765,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile Search Bar Row */}
         <div className="px-4 pb-3 md:hidden">
           <div className="relative w-full">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Search size={16} /></span>
@@ -772,7 +779,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main View Router */}
       {currentView === 'my-dashboard' && user ? (
         <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full animate-fadeIn">
           <div className="flex items-center justify-between mb-4">
@@ -808,14 +814,14 @@ export default function App() {
                         <div>
                           <div className="flex items-center space-x-2 mb-1 flex-wrap gap-y-1">
                             <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
+                            {item.is_urgent && <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">URGENT</span>}
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.status === 'Sold' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
                               {item.status || 'Active'}
                             </span>
                           </div>
-                          <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city}</p>
+                          <p className="text-xs font-bold text-orange-600">Rs. {item.price?.toLocaleString()} · {item.city} (Priority: {item.display_order ?? 0})</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">
                             {item.is_approved ? <span className="text-green-600 font-semibold">Approved</span> : <span className="text-amber-600 font-semibold">Pending Review</span>}
-                            {itemImgs.length > 1 && <span className="ml-2 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-semibold">{itemImgs.length} Photos</span>}
                           </p>
                         </div>
                       </div>
@@ -884,7 +890,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Ad Clicks Filtered by Date Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
             <div className="px-4 md:px-6 py-3.5 border-b bg-blue-50/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
@@ -929,7 +934,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Owner Role Management Box */}
           {isOwner && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6 p-4 md:p-6">
               <h3 className="font-bold text-gray-900 text-sm md:text-base mb-1 flex items-center">
@@ -964,7 +968,6 @@ export default function App() {
                 </button>
               </form>
 
-              {/* Team Members List */}
               <div className="border rounded-xl overflow-hidden mt-4">
                 <div className="bg-gray-50 px-3.5 py-2.5 border-b text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
                   <span>Team Email</span>
@@ -1005,7 +1008,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Pending Approval Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden mb-6">
             <div className="px-4 md:px-6 py-3 border-b bg-orange-50/70 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm md:text-base flex items-center">
@@ -1045,7 +1047,6 @@ export default function App() {
         </main>
       ) : (
         <main className="max-w-7xl mx-auto px-4 py-4 md:py-6 flex-1 w-full">
-          {/* Slim Banner with Mode Title */}
           <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl px-4 md:px-6 py-4 mb-6 text-white shadow-md flex items-center justify-between">
             <button 
               onClick={() => setAppMode(null)}
@@ -1067,7 +1068,6 @@ export default function App() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar Categories (Collapsible/Horizontal on Mobile) */}
             <aside className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-gray-200/80 p-3 md:p-4 shadow-xs sticky top-20">
                 <h3 className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-wider mb-2 px-1 flex items-center">
@@ -1097,7 +1097,6 @@ export default function App() {
               </div>
             </aside>
 
-            {/* Right Content Listings */}
             <div className="lg:col-span-3">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base md:text-xl font-black text-gray-900">
@@ -1128,14 +1127,18 @@ export default function App() {
                         className={`bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer group ${isSold ? 'opacity-80' : ''}`}
                       >
                         <div>
-                          {/* Image Carousel Component for Cards */}
                           <div className="relative">
                             <ImageSlider 
                               images={itemImgs} 
                               heightClass="h-40 md:h-48" 
                               onCardClick={() => handleCardClick(item)} 
                             />
-                            <span className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium z-10">{item.category}</span>
+                            {item.is_urgent && (
+                              <span className="absolute top-2.5 left-2.5 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-md z-10 animate-pulse">
+                                🚨 URGENT
+                              </span>
+                            )}
+                            <span className="absolute top-2.5 right-16 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded-md font-medium z-10">{item.category}</span>
                             <span className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm z-10 ${isNeg ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
                               {isNeg ? 'Negotiable' : 'Fixed'}
                             </span>
@@ -1154,7 +1157,7 @@ export default function App() {
                         <div className="px-3.5 pb-3 flex items-center justify-between text-[11px] text-gray-500 border-t border-gray-100 pt-2.5">
                           <span className="flex items-center font-medium"><MapPin size={12} className="mr-1 text-orange-600" />{item.city || 'Nepal'}</span>
                           <div className="flex items-center space-x-1.5" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[10px] text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
+                            <span className="text-[10px] text-gray-400">Order: {item.display_order ?? 0}</span>
                             {canModify && (
                               <div className="flex items-center space-x-1">
                                 {isEditor && (
@@ -1181,7 +1184,6 @@ export default function App() {
         </main>
       )}
 
-      {/* Mobile Bottom Navigation Bar */}
       {appMode && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 px-4 py-2 flex items-center justify-around shadow-lg">
           <button 
@@ -1243,7 +1245,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Item Detail Modal with Multiple Image Support */}
       {selectedItem && (
         <div 
           onClick={() => setSelectedItem(null)} 
@@ -1260,7 +1261,6 @@ export default function App() {
               <X size={18} />
             </button>
 
-            {/* Active Image Carousel inside Modal */}
             {(() => {
               const itemImgs = getItemImages(selectedItem);
               return (
@@ -1283,6 +1283,7 @@ export default function App() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] md:text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-lg font-bold">{selectedItem.category}</span>
               <div className="flex items-center space-x-1.5">
+                {selectedItem.is_urgent && <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded">URGENT SALE</span>}
                 <span className={`text-[10px] md:text-xs font-bold px-2.5 py-0.5 rounded-full ${selectedItem.negotiable ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
                   {selectedItem.negotiable ? 'Negotiable' : 'Fixed'}
                 </span>
@@ -1321,7 +1322,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Post / Edit Ad Modal with Existing & New Photo Management */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-5 md:p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1354,6 +1354,33 @@ export default function App() {
                   <input type="text" placeholder="e.g. 9812345678" className="w-full border rounded-xl px-3 py-2 text-xs md:text-sm bg-gray-50/50 outline-none focus:ring-2 focus:ring-orange-500" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
                 </div>
               </div>
+
+              {/* Urgent & Custom Order Configuration Row */}
+              <div className="grid grid-cols-2 gap-2.5 bg-orange-50/50 p-3 rounded-xl border border-orange-100">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">Urgent Sale Badge</label>
+                  <label className="flex items-center cursor-pointer text-xs font-semibold text-red-600 pt-1">
+                    <input 
+                      type="checkbox" 
+                      checked={newUrgent} 
+                      onChange={(e) => setNewUrgent(e.target.checked)} 
+                      className="mr-2 w-4 h-4 text-red-600 rounded focus:ring-red-500" 
+                    />
+                    Mark as Urgent
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">Priority Order (0 = Top)</label>
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 1" 
+                    className="w-full border rounded-xl px-3 py-1.5 text-xs bg-white outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+                    value={newOrder} 
+                    onChange={(e) => setNewOrder(e.target.value)} 
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1">Price Type</label>
                 <div className="flex items-center space-x-4 pt-0.5">
@@ -1366,11 +1393,9 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Photo Management Section */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1">Manage Photos</label>
                 
-                {/* Existing Photos Preview & Delete Option */}
                 {existingImages.length > 0 && (
                   <div className="mb-2.5">
                     <span className="text-[10px] text-gray-500 font-semibold block mb-1">Existing Photos (Click × to remove):</span>
@@ -1391,7 +1416,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Upload New Photos Button */}
                 <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs cursor-pointer hover:bg-gray-50 text-gray-600 transition">
                   <Upload size={16} className="mb-1 text-orange-600" />
                   <span className="font-semibold text-center">Click to add new photos</span>
@@ -1408,7 +1432,6 @@ export default function App() {
                   />
                 </label>
 
-                {/* Newly Selected Files Preview & Remove */}
                 {imageFiles.length > 0 && (
                   <div className="mt-2">
                     <span className="text-[10px] text-gray-500 font-semibold block mb-1">New Uploads:</span>
